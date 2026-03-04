@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartlink-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smartlink
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartlink-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: smartlink-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartlink-network
+
+  # MinIO Object Storage (Optional, for file uploads)
+  minio:
+    image: minio/minio:latest
+    container_name: smartlink-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - smartlink-network
+
+  # SmartLink API Service
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: smartlink-api
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/smartlink
+      - REDIS_URL=redis://redis:6379/0
+      - MASTER_API_KEY=sk-smartlink-master-key-change-in-production
+      - SECRET_KEY=your-secret-key-change-in-production-min-32-chars
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../:/app:cached
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smartlink-network
+    command: uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  smartlink-network:
+    driver: bridge
