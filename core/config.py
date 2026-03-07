@@ -2,7 +2,7 @@
 Core configuration management using Pydantic Settings
 """
 from typing import List, Optional
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = True
     VERSION: str = "1.0.0"
+    API_BASE_URL: str = "http://localhost:8000"
     
     # API
     API_HOST: str = "0.0.0.0"
@@ -49,27 +50,56 @@ class Settings(BaseSettings):
     )
     SECRET_KEY: str = Field(
         ...,
-        description="Secret key for JWT signing"
+        description="Secret key for JWT signing (min 32 chars)"
     )
+    
+    # JWT Settings
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # OAuth Providers
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    
+    GITHUB_CLIENT_ID: Optional[str] = None
+    GITHUB_CLIENT_SECRET: Optional[str] = None
+    
+    GITLAB_CLIENT_ID: Optional[str] = None
+    GITLAB_CLIENT_SECRET: Optional[str] = None
     
     # LLM
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     DEFAULT_LLM_PROVIDER: str = "openai"
-    DEFAULT_LLM_MODEL: str = "gpt-4o"
+    DEFAULT_LLM_MODEL: str = "gpt-4o-mini"
     
     # MCP
     MCP_SERVERS_DIR: str = "./mcp_servers"
     
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:5173"]
+    # CORS - Allow frontend development servers
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:5173",  # Vite default
+        "http://localhost:5174",  # Vite alternate
+        "http://localhost:3000",  # React default
+        "http://localhost:8080",  # Vue CLI default
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:3000",
+    ]
     
-    @validator("CORS_ORIGINS", pre=True)
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
             import json
             return json.loads(v)
         return v
+    
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = 60
+    RATE_LIMIT_TOKENS_PER_DAY: int = 100000
     
     # Monitoring
     ENABLE_METRICS: bool = True
@@ -78,6 +108,12 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
+    
+    # Session
+    SESSION_EXPIRE_SECONDS: int = 86400  # 24 hours
+    
+    # Lane Concurrency
+    MAX_CONCURRENT_LANES_PER_USER: int = 3
     
     @property
     def is_development(self) -> bool:

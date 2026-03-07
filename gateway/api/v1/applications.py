@@ -1,179 +1,275 @@
 """
 API routes for application management
+Aligned with frontend service expectations
 """
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from db.session import get_db
-from schemas.common import (
-    ApplicationCreate,
-    ApplicationUpdate,
-    ApplicationResponse,
-    ApplicationListResponse,
-    ResponseBase
+from schemas import (
+    ApiResponse, PaginatedData,
+    ApplicationCreate, ApplicationUpdate, ApplicationResponse, RunApplicationRequest
 )
-from services.application_service import ApplicationService
-from models.application import AppStatus, AppType
+from models import Application, AppStatus, AppType
+from models.application import ResourceStatus
+from agent.core.orchestrator import AgentOrchestrator
 
-router = APIRouter()
+
+router = APIRouter(tags=["Applications"])
 
 
-@router.get("/", response_model=ApplicationListResponse)
+# ============================================================
+# Helper Functions
+# ============================================================
+
+def app_to_response(app: Application) -> dict:
+    """Convert Application model to frontend-expected response format"""
+    return {
+        "id": app.id,
+        "name": app.name,
+        "description": app.description or "",
+        "icon": app.icon or "app",
+        "type": app.type.value if app.type else "custom",
+        "status": app.status.value if app.status else "draft",
+        "version": app.version or "0.1.0",
+        "tags": [],
+        "schema": app.schema or {},
+        "created_at": app.created_at,
+        "updated_at": app.updated_at,
+        "published_at": app.published_at,
+        "is_enabled": app.status == AppStatus.PUBLISHED
+    }
+
+
+# ============================================================
+# Applications API
+# ============================================================
+
+@router.get("/", response_model=ApiResponse[PaginatedData[dict]])
 async def list_applications(
-    page: int = 1,
-    page_size: int = 20,
-    status: Optional[AppStatus] = None,
-    type: Optional[AppType] = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
+    status: Optional[str] = None,
+    type: Optional[str] = None,
     keyword: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """
     List applications with pagination and filters
     
-    - **page**: Page number (default: 1)
-    - **page_size**: Page size (default: 20, max: 100)
-    - **status**: Filter by status
-    - **type**: Filter by type
-    - **keyword**: Search keyword
+    Frontend expects:
+    - GET /applications/?page=1&page_size=20&status=draft&type=workflow&keyword=search
     """
-    service = ApplicationService(db)
+    query = select(Application)
+    count_query = select(func.count(Application.id))
     
-    applications, total = await service.list_applications(
-        page=page,
-        page_size=page_size,
-        status=status,
-        type=type,
-        keyword=keyword
-    )
+    if status:
+        try:
+            app_status = AppStatus(status)
+            query = query.where(Application.status == app_status)
+            count_query = count_query.where(Application.status == app_status)
+        except ValueError:
+            pass
     
-    return ApplicationListResponse(
-        code=200,
-        message="success",
-        total=total,
-        page=page,
-        page_size=page_size,
-        data=[ApplicationResponse.from_orm(app) for app in applications]
+    if type:
+        try:
+            app_type = AppType(type)
+            query = query.where(Application.type == app_type)
+            count_query = count_query.where(Application.type == app_type)
+        except ValueError:
+            pass
+    
+    if keyword:
+        query = query.where(Application.name.ilike(f"%{keyword}%"))
+        count_query = count_query.where(Application.name.ilike(f"%{keyword}%"))
+    
+    # Get total count
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+    
+    # Get paginated results
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    applications = result.scalars().all()
+    
+    return ApiResponse(
+        data=PaginatedData(
+            list=[app_to_response(app) for app in applications],
+            total=total,
+            page=page,
+            page_size=page_size
+        )
     )
 
 
-@router.post("/", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ApiResponse[dict])
 async def create_application(
-    app_data: ApplicationCreate,
+    data: ApplicationCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Create a new application
+    """Create a new application"""
+    import uuid
     
-    - **name**: Application name (required)
-    - **description**: Application description
-    - **icon**: Application icon
-    - **type**: Application type (workflow/chart/form/dashboard/custom)
-    - **schema**: Application flow schema
-    """
-    service = ApplicationService(db)
-    application = await service.create_application(app_data)
+    application = Application(
+        id=str(uuid.uuid4()),
+        name=data.name,
+        description=data.description or "",
+        icon=data.icon or "app",
+        type=data.type or AppType.CUSTOM,
+        status=AppStatus.DRAFT,
+        schema=data.schema or {},
+        tags=data.tags or []
+    )
     
-    return ApplicationResponse.from_orm(application)
+    db.add(application)
+    await db.commit()
+    await db.refresh(application)
+    
+    return ApiResponse(data=app_to_response(application))
 
 
-@router.get("/{app_id}", response_model=ApplicationResponse)
+@router.get("/{app_id}", response_model=ApiResponse[dict])
 async def get_application(
     app_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Get application by ID
-    """
-    service = ApplicationService(db)
-    application = await service.get_application(app_id)
+    """Get application by ID"""
+    result = await db.execute(select(Application).where(Application.id == app_id))
+    application = result.scalar_one_or_none()
     
     if not application:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application {app_id} not found"
-        )
+        raise HTTPException(status_code=404, detail="Application not found")
     
-    return ApplicationResponse.from_orm(application)
+    return ApiResponse(data=app_to_response(application))
 
 
-@router.put("/{app_id}", response_model=ApplicationResponse)
+@router.put("/{app_id}", response_model=ApiResponse[dict])
 async def update_application(
     app_id: str,
-    app_data: ApplicationUpdate,
+    data: ApplicationUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Update application
-    
-    All fields are optional - only provided fields will be updated
-    """
-    service = ApplicationService(db)
-    application = await service.update_application(app_id, app_data)
+    """Update application"""
+    result = await db.execute(select(Application).where(Application.id == app_id))
+    application = result.scalar_one_or_none()
     
     if not application:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application {app_id} not found"
-        )
+        raise HTTPException(status_code=404, detail="Application not found")
     
-    return ApplicationResponse.from_orm(application)
+    update_data = data.model_dump(exclude_unset=True)
+    
+    # Convert string enums to proper types
+    if "status" in update_data and isinstance(update_data["status"], str):
+        update_data["status"] = AppStatus(update_data["status"])
+    if "type" in update_data and isinstance(update_data["type"], str):
+        update_data["type"] = AppType(update_data["type"])
+    
+    for key, value in update_data.items():
+        setattr(application, key, value)
+    
+    await db.commit()
+    await db.refresh(application)
+    
+    return ApiResponse(data=app_to_response(application))
 
 
-@router.delete("/{app_id}", response_model=ResponseBase)
+@router.delete("/{app_id}")
 async def delete_application(
     app_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Delete application
-    """
-    service = ApplicationService(db)
-    success = await service.delete_application(app_id)
+    """Delete application"""
+    result = await db.execute(select(Application).where(Application.id == app_id))
+    application = result.scalar_one_or_none()
     
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application {app_id} not found"
-        )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
     
-    return ResponseBase(code=200, message="Application deleted successfully")
+    await db.delete(application)
+    await db.commit()
+    
+    return ApiResponse(data={"deleted": True})
 
 
-@router.post("/{app_id}/publish", response_model=ApplicationResponse)
+@router.post("/{app_id}/publish", response_model=ApiResponse[dict])
 async def publish_application(
     app_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Publish application
+    """Publish application"""
+    from datetime import datetime
     
-    Changes status to 'published' and sets published_at timestamp
-    """
-    service = ApplicationService(db)
-    application = await service.publish_application(app_id)
+    result = await db.execute(select(Application).where(Application.id == app_id))
+    application = result.scalar_one_or_none()
     
     if not application:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application {app_id} not found"
-        )
+        raise HTTPException(status_code=404, detail="Application not found")
     
-    return ApplicationResponse.from_orm(application)
+    application.status = AppStatus.PUBLISHED
+    application.published_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(application)
+    
+    return ApiResponse(data=app_to_response(application))
 
 
-@router.post("/{app_id}/run", response_model=dict)
+@router.post("/{app_id}/run")
 async def run_application(
     app_id: str,
-    input_data: dict,
+    data: RunApplicationRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Run application
+    """Run application"""
+    from datetime import datetime
+    import uuid
     
-    Execute the application with provided input data
-    """
-    service = ApplicationService(db)
-    result = await service.run_application(app_id, input_data)
+    # Get application
+    result = await db.execute(select(Application).where(Application.id == app_id))
+    application = result.scalar_one_or_none()
     
-    return result
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    if application.status != AppStatus.PUBLISHED:
+        raise HTTPException(status_code=400, detail="Application must be published before running")
+    
+    # Create conversation for this run
+    from models import Conversation
+    conversation = Conversation(
+        id=str(uuid.uuid4()),
+        tenant_id=application.tenant_id,
+        title=f"Run: {application.name}",
+        app_id=app_id
+    )
+    db.add(conversation)
+    await db.commit()
+    await db.refresh(conversation)
+    
+    # Execute agent
+    try:
+        orchestrator = AgentOrchestrator()
+        result = await orchestrator.execute(
+            app_id=app_id,
+            input_data=data.input_data or {},
+            conversation_id=conversation.id
+        )
+        
+        return ApiResponse(data={
+            "conversation_id": conversation.id,
+            "result": result,
+            "status": "completed"
+        })
+    except Exception as e:
+        return ApiResponse(
+            code=500,
+            message=str(e),
+            data={
+                "conversation_id": conversation.id,
+                "result": None,
+                "status": "error",
+                "error": str(e)
+            }
+        )

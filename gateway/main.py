@@ -7,13 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 import uvicorn
+import redis.asyncio as redis
 
 from core.config import settings
 from core.exceptions import SmartLinkException
 from db import init_db, close_db
 from gateway.api import api_router
-from gateway.middleware import APIKeyMiddleware, LoggingMiddleware
+from gateway.middleware.auth import AuthMiddleware
+from gateway.middleware.logging import LoggingMiddleware
+from gateway.middleware.rate_limit import RateLimitMiddleware
 from gateway.websocket.manager import manager
+from services.session_manager import session_manager
+from agent.mcp.client import mcp_manager
 
 
 @asynccontextmanager
@@ -23,35 +28,48 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events
     """
     # Startup
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.VERSION}")
+    print(f"[START] Starting {settings.APP_NAME} v{settings.VERSION}")
     print(f"   Environment: {settings.APP_ENV}")
     
     # Initialize database
-    print("📦 Initializing database...")
+    print("[DB] Initializing database...")
     await init_db()
-    print("✓ Database initialized")
+    print("[OK] Database initialized")
     
     # Initialize Redis
-    print("🔴 Connecting to Redis...")
+    print("[REDIS] Connecting to Redis...")
     await manager.init_redis()
-    print("✓ Redis connected")
+    print("[OK] Redis connected")
     
-    print(f"✅ {settings.APP_NAME} is ready!")
+    # Initialize session manager
+    print("[SESSION] Initializing session manager...")
+    await session_manager.connect()
+    print("[OK] Session manager initialized")
+    
+    print(f"[READY] {settings.APP_NAME} is ready!")
     
     yield
     
     # Shutdown
-    print(f"🛑 Shutting down {settings.APP_NAME}")
+    print(f"[STOP] Shutting down {settings.APP_NAME}")
+    
+    # Close MCP connections
+    await mcp_manager.disconnect_all()
+    print("[OK] MCP connections closed")
+    
+    # Close session manager
+    await session_manager.disconnect()
+    print("[OK] Session manager closed")
     
     # Close Redis
     await manager.close()
-    print("✓ Redis connection closed")
+    print("[OK] Redis connection closed")
     
     # Close database
     await close_db()
-    print("✓ Database connections closed")
+    print("[OK] Database connections closed")
     
-    print("👋 Goodbye!")
+    print("[BYE] Goodbye!")
 
 
 # Create FastAPI application
@@ -85,9 +103,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware
+# Add custom middleware (order matters: last added = first executed)
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(APIKeyMiddleware)
+app.add_middleware(AuthMiddleware)  # New auth middleware supporting JWT and API keys
+if settings.RATE_LIMIT_ENABLED:
+    app.add_middleware(RateLimitMiddleware)
 
 
 # Exception handlers

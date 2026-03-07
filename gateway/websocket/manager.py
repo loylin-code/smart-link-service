@@ -41,7 +41,7 @@ class ConnectionManager:
             
             # Test connection
             await self.redis.ping()
-            print("✓ Redis connected successfully")
+            print("[OK] Redis connected successfully")
             
         except Exception as e:
             raise RedisError(f"Failed to connect to Redis: {str(e)}", operation="init")
@@ -69,7 +69,7 @@ class ConnectionManager:
         # Subscribe to Redis channel for this client
         await self._subscribe_client(client_id)
         
-        print(f"✓ Client {client_id} connected (app: {app_id})")
+        print(f"[OK] Client {client_id} connected (app: {app_id})")
     
     def disconnect(self, client_id: str):
         """
@@ -88,7 +88,7 @@ class ConnectionManager:
             if not clients:
                 del self.app_clients[app_id]
         
-        print(f"✗ Client {client_id} disconnected")
+        print(f"[DISCONNECT] Client {client_id} disconnected")
     
     async def send_personal_message(self, message: Dict[str, Any], client_id: str):
         """
@@ -202,7 +202,7 @@ class ConnectionManager:
         self.active_connections.clear()
         self.app_clients.clear()
         
-        print("✓ Connection manager closed")
+        print("[OK] Connection manager closed")
 
 
 # Global connection manager instance

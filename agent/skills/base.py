@@ -44,7 +44,7 @@ class BaseSkill(ABC):
         """
         pass
     
-    def validate_params(self, params: Dict[str, Any]) -> bool:
+def validate_params(self, params: Dict[str, Any]) -> bool:
         """
         Validate parameters against config schema
         
@@ -57,8 +57,42 @@ class BaseSkill(ABC):
         Raises:
             SkillError if invalid
         """
-        # TODO: Implement schema validation
-        return True
+        schema = self.get_parameters_schema()
+        if not schema:
+            return True
+        
+        try:
+            import jsonschema
+            jsonschema.validate(params, schema)
+            return True
+        except jsonschema.ValidationError as e:
+            raise SkillError(
+                f"Parameter validation failed for skill '{self.name}': {e.message}",
+                skill_name=self.name
+            )
+        except jsonschema.SchemaError as e:
+            raise SkillError(
+                f"Invalid schema for skill '{self.name}': {e.message}",
+                skill_name=self.name
+            )
+        except ImportError:
+            # jsonschema not installed, skip validation
+            return True
+        
+        try:
+            import jsonschema
+            jsonschema.validate(params, schema)
+            return True
+        except jsonschema.ValidationError as e:
+            raise SkillError(
+                f"Parameter validation failed for skill '{self.name}': {e.message}",
+                skill_name=self.name
+            )
+        except jsonschema.SchemaError as e:
+            raise SkillError(
+                f"Invalid schema for skill '{self.name}': {e.message}",
+                skill_name=self.name
+            )
     
     def to_openai_tool(self) -> Dict[str, Any]:
         """
