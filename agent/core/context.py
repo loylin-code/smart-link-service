@@ -2,7 +2,7 @@
 Agent context management
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class AgentContext:
@@ -49,7 +49,7 @@ class AgentContext:
             input_data: Input data from user
             conversation_id: Conversation ID (if continuing)
         """
-        self.metadata["start_time"] = datetime.utcnow()
+        self.metadata["start_time"] = datetime.now(timezone.utc)
         self.metadata["app_id"] = app_config.get("id")
         self.metadata["conversation_id"] = conversation_id
         
@@ -87,7 +87,7 @@ class AgentContext:
         self.history.append({
             "node_id": node_id,
             "result": result,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
         # Update state if result is a dict
@@ -116,7 +116,7 @@ class AgentContext:
         Returns:
             Final result dict
         """
-        self.metadata["end_time"] = datetime.utcnow()
+        self.metadata["end_time"] = datetime.now(timezone.utc)
         
         # Get last assistant message
         assistant_messages = [
