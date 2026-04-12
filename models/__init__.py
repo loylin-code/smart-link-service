@@ -37,6 +37,13 @@ from models.workflow import (
     ExecutionStatus
 )
 
+from models.agent import (
+    Agent,
+    AgentRuntimeStatus,
+    AgentStatus,
+    AgentType as AgentTypeEnum
+)
+
 __all__ = [
     # Application models
     "Application",
@@ -70,4 +77,10 @@ __all__ = [
     "WorkflowStatus",
     "NodeType",
     "ExecutionStatus",
+    
+    # Agent models
+    "Agent",
+    "AgentRuntimeStatus",
+    "AgentStatus",
+    "AgentTypeEnum",
 ]

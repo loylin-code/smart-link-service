@@ -101,7 +101,7 @@ class Conversation(Base):
     
     id = Column(String, primary_key=True, default=generate_uuid)
     tenant_id = Column(String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    app_id = Column(String, ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    app_id = Column(String, ForeignKey("applications.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Conversation info
@@ -110,7 +110,7 @@ class Conversation(Base):
     
     # Context
     context = Column(JSON, default=dict, nullable=False)  # Conversation context/state
-    metadata = Column(JSON, default=dict, nullable=False)  # Additional metadata
+    extra_metadata = Column("metadata", JSON, default=dict, nullable=False)  # Additional metadata
     
     # Status
     is_archived = Column(Boolean, default=False, nullable=False)
@@ -165,7 +165,7 @@ class Message(Base):
     total_tokens = Column(Integer, nullable=True)
     
     # Metadata
-    metadata = Column(JSON, default=dict, nullable=False)
+    extra_metadata = Column("metadata", JSON, default=dict, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
@@ -210,7 +210,7 @@ class Resource(Base):
     processing_error = Column(Text, nullable=True)
     
     # Metadata
-    metadata = Column(JSON, default=dict, nullable=False)
+    extra_metadata = Column("metadata", JSON, default=dict, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     created_by = Column(String, ForeignKey("users.id"), nullable=True)

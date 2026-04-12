@@ -83,6 +83,7 @@ class Tenant(Base):
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
     api_keys = relationship("APIKey", back_populates="tenant", cascade="all, delete-orphan")
     applications = relationship("Application", back_populates="tenant", cascade="all, delete-orphan")
+    agents = relationship("Agent", back_populates="tenant", cascade="all, delete-orphan")
     
     # Indexes
     __table_args__ = (

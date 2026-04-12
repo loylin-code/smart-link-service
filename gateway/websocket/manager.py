@@ -48,16 +48,16 @@ class ConnectionManager:
     
     async def connect(self, websocket: WebSocket, client_id: str, app_id: Optional[str] = None):
         """
-        Accept and register a new WebSocket connection
+        Register a new WebSocket connection
+        
+        Note: websocket should already be accepted by the endpoint
         
         Args:
-            websocket: WebSocket connection
+            websocket: WebSocket connection (already accepted)
             client_id: Unique client identifier
             app_id: Application ID (optional)
         """
-        await websocket.accept()
-        
-        # Store connection
+        # Store connection (websocket already accepted by endpoint)
         self.active_connections[client_id] = websocket
         
         # Map app to client

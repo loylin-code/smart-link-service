@@ -100,3 +100,21 @@ class RedisError(SmartLinkException):
     def __init__(self, message: str, operation: Optional[str] = None):
         details = {"operation": operation} if operation else {}
         super().__init__(message, code="REDIS_ERROR", details=details)
+
+
+class SessionNotFoundError(SmartLinkException):
+    """Session not found error"""
+    
+    def __init__(self, session_id: str):
+        super().__init__(
+            f"Session '{session_id}' not found",
+            code="SESSION_NOT_FOUND",
+            details={"session_id": session_id}
+        )
+
+
+class QuotaExceededError(SmartLinkException):
+    """Quota exceeded error"""
+    
+    def __init__(self, message: str = "Quota exceeded"):
+        super().__init__(message, code="QUOTA_EXCEEDED")

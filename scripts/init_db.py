@@ -21,7 +21,9 @@ from models import (
     AppStatus, AppType, ResourceStatus,
     # Workflow models
     Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution, NodeExecution,
-    WorkflowStatus, NodeType, ExecutionStatus
+    WorkflowStatus, NodeType, ExecutionStatus,
+    # Agent models
+    Agent, AgentRuntimeStatus, AgentStatus, AgentTypeEnum
 )
 
 
@@ -177,6 +179,85 @@ async def seed_initial_data():
         for skill in builtin_skills:
             db.add(skill)
         
+        # Create sample agents
+        sample_agents = [
+            Agent(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant.id,
+                name="智能客服助手",
+                code="smart_customer_service",
+                description="专业的智能客服助手，支持常见问题自动回复和人工转接",
+                avatar="🤖",
+                persona="你是一个专业的客服助手，负责解答客户的常见问题。请保持礼貌和耐心，回答简洁明了。",
+                welcome_message="您好！我是智能客服助手，请问有什么可以帮您？",
+                type=AgentTypeEnum.CUSTOM,
+                status=AgentStatus.ACTIVE,
+                tags=["客服", "智能", "对话"],
+                category="service",
+                creator=admin_user.id,
+                responsibilities=[
+                    {"id": "resp_1", "name": "问题解答", "description": "解答客户常见问题", "priority": 1, "keywords": ["问题", "咨询"], "examples": []}
+                ],
+                llm_config={
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "temperature": 0.7,
+                    "maxTokens": 4096,
+                    "topP": 1
+                }
+            ),
+            Agent(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant.id,
+                name="数据分析专家",
+                code="data_analyst",
+                description="专注于数据分析和可视化报告的智能助手",
+                avatar="📊",
+                persona="你是一个数据分析专家，擅长从数据中发现洞见并生成可视化报告。",
+                welcome_message="您好！我是数据分析专家，请提供您需要分析的数据。",
+                type=AgentTypeEnum.CUSTOM,
+                status=AgentStatus.ACTIVE,
+                tags=["数据分析", "报表", "可视化"],
+                category="analytics",
+                creator=admin_user.id,
+                responsibilities=[
+                    {"id": "resp_2", "name": "数据分析", "description": "分析数据并生成报告", "priority": 1, "keywords": ["分析", "数据"], "examples": []}
+                ],
+                llm_config={
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "temperature": 0.5,
+                    "maxTokens": 8192,
+                    "topP": 1
+                }
+            ),
+            Agent(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant.id,
+                name="文档处理助手",
+                code="document_processor",
+                description="文档摘要、格式转换和内容提取",
+                avatar="📄",
+                persona="你是一个文档处理助手，擅长文档摘要、格式转换和内容提取。",
+                welcome_message="您好！请上传您需要处理的文档。",
+                type=AgentTypeEnum.TEMPLATE,
+                status=AgentStatus.DRAFT,
+                tags=["文档", "处理", "摘要"],
+                category="processing",
+                creator=admin_user.id,
+                responsibilities=[],
+                llm_config={
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "temperature": 0.3,
+                    "maxTokens": 4096,
+                    "topP": 1
+                }
+            )
+        ]
+        for agent in sample_agents:
+            db.add(agent)
+        
         await db.commit()
         
         print(f"[OK] Created tenant: {tenant.name} (id: {tenant.id})")
@@ -184,6 +265,7 @@ async def seed_initial_data():
         print(f"[OK] Created sample app: {sample_app.name}")
         print(f"[OK] Created API key: {master_key}")
         print(f"[OK] Created {len(builtin_skills)} builtin skills")
+        print(f"[OK] Created {len(sample_agents)} sample agents")
 
 
 async def main():

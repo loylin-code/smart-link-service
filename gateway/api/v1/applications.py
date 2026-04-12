@@ -3,7 +3,7 @@ API routes for application management
 Aligned with frontend service expectations
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -12,7 +12,7 @@ from schemas import (
     ApiResponse, PaginatedData,
     ApplicationCreate, ApplicationUpdate, ApplicationResponse, RunApplicationRequest
 )
-from models import Application, AppStatus, AppType
+from models import Application, AppStatus, AppType, Tenant, TenantStatus
 from models.application import ResourceStatus
 from agent.core.orchestrator import AgentOrchestrator
 
@@ -49,6 +49,7 @@ def app_to_response(app: Application) -> dict:
 
 @router.get("/", response_model=ApiResponse[PaginatedData[dict]])
 async def list_applications(
+    request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
     status: Optional[str] = None,
@@ -62,8 +63,24 @@ async def list_applications(
     Frontend expects:
     - GET /applications/?page=1&page_size=20&status=draft&type=workflow&keyword=search
     """
+    # Get tenant_id from request context
+    tenant_context = getattr(request.state, "tenant_context", None)
+    
     query = select(Application)
     count_query = select(func.count(Application.id))
+    
+    # For master key, get first active tenant
+    if tenant_context and tenant_context.is_master:
+        result = await db.execute(
+            select(Tenant).where(Tenant.status == TenantStatus.ACTIVE).limit(1)
+        )
+        tenant = result.scalar_one_or_none()
+        if tenant:
+            query = query.where(Application.tenant_id == tenant.id)
+            count_query = count_query.where(Application.tenant_id == tenant.id)
+    elif tenant_context and tenant_context.tenant_id:
+        query = query.where(Application.tenant_id == tenant_context.tenant_id)
+        count_query = count_query.where(Application.tenant_id == tenant_context.tenant_id)
     
     if status:
         try:
@@ -107,13 +124,32 @@ async def list_applications(
 @router.post("/", response_model=ApiResponse[dict])
 async def create_application(
     data: ApplicationCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new application"""
     import uuid
     
+    # Get tenant_id from request context
+    tenant_context = getattr(request.state, "tenant_context", None)
+    
+    # For master key, get first active tenant
+    if tenant_context and tenant_context.is_master:
+        result = await db.execute(
+            select(Tenant).where(Tenant.status == TenantStatus.ACTIVE).limit(1)
+        )
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=400, detail="No active tenant found")
+        tenant_id = tenant.id
+    elif tenant_context and tenant_context.tenant_id:
+        tenant_id = tenant_context.tenant_id
+    else:
+        raise HTTPException(status_code=400, detail="Tenant ID is required")
+    
     application = Application(
         id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
         name=data.name,
         description=data.description or "",
         icon=data.icon or "app",

@@ -9,7 +9,6 @@ from sqlalchemy import select, func, or_
 from models.application import Application, AppStatus, AppType
 from schemas.common import ApplicationCreate, ApplicationUpdate
 from core.exceptions import NotFoundError, ValidationError
-from agent.core.orchestrator import AgentOrchestrator
 
 
 class ApplicationService:
@@ -153,6 +152,8 @@ class ApplicationService:
         input_data: dict
     ) -> dict:
         """Run application with input data"""
+        from agent.core.orchestrator import AgentOrchestrator
+        
         application = await self.get_application(app_id)
         
         if not application:

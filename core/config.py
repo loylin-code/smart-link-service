@@ -6,6 +6,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class DatabaseType:
+    """Database type constants"""
+    SQLITE = "sqlite"
+    POSTGRESQL = "postgresql"
+
+
 class Settings(BaseSettings):
     """Application settings"""
     
@@ -28,12 +34,45 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     
     # Database
-    DATABASE_URL: str = Field(
-        ...,
-        description="PostgreSQL connection URL with asyncpg driver"
+    DATABASE_TYPE: str = Field(
+        default="sqlite",
+        description="Database type: 'sqlite' for development, 'postgresql' for production"
     )
+    DATABASE_URL: Optional[str] = Field(
+        default=None,
+        description="Database connection URL. If not set, will be constructed from other settings"
+    )
+    # SQLite settings (for development)
+    SQLITE_DB_FILE: str = Field(
+        default="smartlink.db",
+        description="SQLite database file path (relative to project root)"
+    )
+    # PostgreSQL settings (for production)
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "smartlink"
+    
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
+    
+    def get_database_url(self) -> str:
+        """
+        Get database URL based on DATABASE_TYPE.
+        - SQLite: sqlite+aiosqlite:///./{SQLITE_DB_FILE}
+        - PostgreSQL: postgresql+asyncpg://user:pass@host:port/db
+        """
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        
+        if self.DATABASE_TYPE == DatabaseType.SQLITE:
+            return f"sqlite+aiosqlite:///./{self.SQLITE_DB_FILE}"
+        else:
+            return (
+                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            )
     
     # Redis
     REDIS_URL: str = Field(

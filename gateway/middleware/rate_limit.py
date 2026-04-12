@@ -37,6 +37,10 @@ class RateLimiter:
         Returns:
             Tuple of (allowed, remaining, retry_after)
         """
+        # If no Redis, allow all requests (development mode)
+        if not self.redis:
+            return True, max_requests, 0
+        
         redis_key = f"{self.prefix}:{key}"
         now = time.time()
         window_start = now - window_seconds
@@ -75,6 +79,8 @@ class RateLimiter:
         amount: int = 1
     ):
         """Increment resource usage counter"""
+        if not self.redis:
+            return
         key = f"{self.prefix}:usage:{tenant_id}:{resource}"
         await self.redis.incrby(key, amount)
     
@@ -84,6 +90,8 @@ class RateLimiter:
         resource: str
     ) -> int:
         """Get current resource usage"""
+        if not self.redis:
+            return 0
         key = f"{self.prefix}:usage:{tenant_id}:{resource}"
         value = await self.redis.get(key)
         return int(value) if value else 0
@@ -100,14 +108,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, redis_client: redis.Redis = None):
         super().__init__(app)
         self.limiter = RateLimiter(redis_client)
+        self.redis_available = redis_client is not None
     
     async def dispatch(self, request: Request, call_next):
         # Skip exempt paths
         if request.url.path in self.EXEMPT_PATHS:
             return await call_next(request)
         
-        # Skip WebSocket
-        if request.url.path.startswith("/ws"):
+        # Skip WebSocket paths
+        websocket_paths = ("/ws", "/api/v1/ws", "/api/v1/chat", "/api/v1/stream")
+        if request.url.path.startswith(websocket_paths):
+            return await call_next(request)
+        
+        # Skip rate limiting if Redis is not available (development mode)
+        if not self.redis_available:
             return await call_next(request)
         
         # Get rate limit key

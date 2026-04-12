@@ -4,7 +4,7 @@ Aligned with frontend expectations
 """
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Generic, TypeVar
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # Import enums from models
 from models.application import AppStatus, AppType, ResourceStatus
@@ -79,6 +79,8 @@ class PaginationParams(BaseModel):
 
 class ApplicationBase(BaseModel):
     """Base application schema"""
+    model_config = ConfigDict(protected_namespaces=())
+    
     name: str = Field(..., min_length=1, max_length=255, description="Application name")
     description: Optional[str] = Field(default="", description="Application description")
     icon: Optional[str] = Field(default="app", max_length=100, description="Application icon")
@@ -87,23 +89,27 @@ class ApplicationBase(BaseModel):
 
 class ApplicationCreate(ApplicationBase):
     """Create application schema"""
-    schema: Optional[Dict[str, Any]] = Field(default={}, description="Application schema (nodes and edges)")
+    app_schema: Optional[Dict[str, Any]] = Field(default={}, alias="schema", description="Application schema (nodes and edges)")
     tags: Optional[List[str]] = Field(default=[], description="Application tags")
 
 
 class ApplicationUpdate(BaseModel):
     """Update application schema"""
+    model_config = ConfigDict(protected_namespaces=(), populate_by_name=True)
+    
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=100)
     type: Optional[AppType] = None
     status: Optional[AppStatus] = None
-    schema: Optional[Dict[str, Any]] = None
+    app_schema: Optional[Dict[str, Any]] = Field(None, alias="schema")
     tags: Optional[List[str]] = None
 
 
 class ApplicationResponse(BaseModel):
     """Application response schema matching frontend Application type"""
+    model_config = ConfigDict(protected_namespaces=(), from_attributes=True, populate_by_name=True)
+    
     id: str
     name: str
     description: str = ""
@@ -112,14 +118,11 @@ class ApplicationResponse(BaseModel):
     status: AppStatus
     version: str = "0.1.0"
     tags: List[str] = []
-    schema: Dict[str, Any] = {}
+    app_schema: Dict[str, Any] = Field(default={}, alias="schema")
     created_at: datetime
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
     is_enabled: bool = False
-    
-    class Config:
-        from_attributes = True
 
 
 class ApplicationListParams(PaginationParams):

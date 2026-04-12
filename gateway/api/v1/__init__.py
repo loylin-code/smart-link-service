@@ -2,7 +2,7 @@
 API v1 module initialization
 """
 from fastapi import APIRouter
-from gateway.api.v1 import applications, resources, websocket, auth, conversations
+from gateway.api.v1 import applications, resources, websocket, auth, conversations, agents
 
 api_router = APIRouter()
 
@@ -13,6 +13,11 @@ api_router.include_router(
 )
 
 # Include all API routes
+api_router.include_router(
+    agents.router,
+    tags=["Agents"]
+)
+
 api_router.include_router(
     applications.router,
     prefix="/applications",

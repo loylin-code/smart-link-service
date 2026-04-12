@@ -17,8 +17,13 @@ from gateway.middleware.auth import AuthMiddleware
 from gateway.middleware.logging import LoggingMiddleware
 from gateway.middleware.rate_limit import RateLimitMiddleware
 from gateway.websocket.manager import manager
+from gateway.websocket.lane import init_lane_registry
+from gateway.websocket.router import init_router
+from gateway.websocket.heartbeat import init_heartbeat_manager
 from services.session_manager import session_manager
 from agent.mcp.client import mcp_manager
+from agent.distribution import init_distribution
+from agent.llm.resolver import init_model_resolver
 
 
 @asynccontextmanager
@@ -36,15 +41,55 @@ async def lifespan(app: FastAPI):
     await init_db()
     print("[OK] Database initialized")
     
-    # Initialize Redis
+    # Initialize Redis (optional in development mode)
+    redis_client = None
     print("[REDIS] Connecting to Redis...")
-    await manager.init_redis()
-    print("[OK] Redis connected")
+    try:
+        await manager.init_redis()
+        redis_client = redis.Redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True
+        )
+        print("[OK] Redis connected")
+    except Exception as e:
+        if settings.is_development:
+            print(f"[WARN] Redis connection failed (development mode, continuing without Redis): {str(e)[:100]}")
+        else:
+            raise
     
-    # Initialize session manager
-    print("[SESSION] Initializing session manager...")
-    await session_manager.connect()
-    print("[OK] Session manager initialized")
+    # Initialize session manager (skip if no Redis)
+    if redis_client:
+        print("[SESSION] Initializing session manager...")
+        await session_manager.connect()
+        print("[OK] Session manager initialized")
+        
+        # Initialize Lane Manager registry
+        print("[LANE] Initializing lane manager...")
+        await init_lane_registry(redis_client)
+        print("[OK] Lane manager initialized")
+        
+        # Initialize request router
+        print("[ROUTER] Initializing request router...")
+        await init_router(redis_client)
+        print("[OK] Request router initialized")
+        
+        # Initialize heartbeat manager
+        print("[HEARTBEAT] Initializing heartbeat manager...")
+        await init_heartbeat_manager(redis_client)
+        print("[OK] Heartbeat manager initialized")
+        
+        # Initialize distribution system (task queue + agent pool)
+        print("[DISTRIBUTION] Initializing distribution system...")
+        await init_distribution(redis_client)
+        print("[OK] Distribution system initialized")
+    else:
+        print("[WARN] Skipping Redis-dependent services (no Redis connection)")
+    
+    # Initialize model resolver
+    print("[MODEL] Initializing model resolver...")
+    init_model_resolver()
+    print("[OK] Model resolver initialized")
     
     print(f"[READY] {settings.APP_NAME} is ready!")
     
@@ -58,12 +103,13 @@ async def lifespan(app: FastAPI):
     print("[OK] MCP connections closed")
     
     # Close session manager
-    await session_manager.disconnect()
-    print("[OK] Session manager closed")
-    
-    # Close Redis
-    await manager.close()
-    print("[OK] Redis connection closed")
+    if redis_client:
+        await session_manager.disconnect()
+        print("[OK] Session manager closed")
+        
+        # Close Redis
+        await manager.close()
+        print("[OK] Redis connection closed")
     
     # Close database
     await close_db()
@@ -85,6 +131,9 @@ app = FastAPI(
     - **WebSocket Support**: Real-time communication for agent execution
     - **Multi-LLM Support**: OpenAI, Anthropic Claude, and local models via LiteLLM
     - **MCP Protocol**: Support for Model Context Protocol
+    - **Lane Concurrency**: Per-user concurrent execution with 3 lanes
+    - **Task Queue**: Priority-based task distribution
+    - **Agent Pool**: Instance management and load balancing
     """,
     version=settings.VERSION,
     docs_url="/docs",
@@ -105,7 +154,7 @@ app.add_middleware(
 
 # Add custom middleware (order matters: last added = first executed)
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(AuthMiddleware)  # New auth middleware supporting JWT and API keys
+app.add_middleware(AuthMiddleware)
 if settings.RATE_LIMIT_ENABLED:
     app.add_middleware(RateLimitMiddleware)
 
@@ -155,12 +204,30 @@ app.include_router(api_router, prefix=settings.API_PREFIX)
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
+    from gateway.websocket.lane import get_lane_registry
+    from agent.distribution import get_queue_manager, get_agent_pool
+    
+    stats = {
         "status": "healthy",
         "app": settings.APP_NAME,
         "version": settings.VERSION,
         "environment": settings.APP_ENV
     }
+    
+    # Add system stats
+    lane_registry = get_lane_registry()
+    if lane_registry:
+        stats["lane_stats"] = lane_registry.get_global_stats()
+    
+    queue_manager = get_queue_manager()
+    if queue_manager:
+        stats["queue_stats"] = await queue_manager.get_global_stats()
+    
+    agent_pool = get_agent_pool()
+    if agent_pool:
+        stats["agent_stats"] = await agent_pool.get_stats()
+    
+    return stats
 
 
 # Root endpoint

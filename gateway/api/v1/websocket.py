@@ -3,6 +3,7 @@ API routes for WebSocket endpoint
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 
 from db.session import get_db
 from gateway.websocket.manager import manager
@@ -11,6 +12,7 @@ from gateway.middleware.auth import verify_api_key_ws
 from core.config import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.websocket("/chat/{client_id}")
@@ -23,7 +25,7 @@ async def websocket_chat(
     """
     WebSocket chat endpoint
     
-    Connect with: ws://host/ws/chat/{client_id}?app_id={app_id}&api_key={api_key}
+    Connect with: ws://host/api/v1/ws/chat/{client_id}?app_id={app_id}&api_key={api_key}
     
     Message format:
     {
@@ -31,10 +33,21 @@ async def websocket_chat(
         "data": {...}
     }
     """
+    # Debug: log connection attempt
+    logger.info(f"WebSocket connection attempt: client={client_id}, app_id={app_id}, api_key={api_key[:20] if api_key else 'None'}...")
+    
+    # Accept connection first
+    await websocket.accept()
+    logger.info(f"WebSocket accepted for client {client_id}")
+    
     # Verify API key
-    if not await verify_api_key_ws(websocket):
+    context = await verify_api_key_ws(websocket)
+    if not context:
+        logger.warning(f"WebSocket auth failed for client {client_id}")
         await websocket.close(code=1008, reason="Unauthorized")
         return
+    
+    logger.info(f"WebSocket auth success for client {client_id}, tenant={context.tenant_id}")
     
     # Connect client
     await manager.connect(websocket, client_id, app_id)

@@ -3,7 +3,7 @@ Conversation REST API
 对话管理 HTTP 端点
 Aligned with frontend service expectations
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional
@@ -12,10 +12,10 @@ import uuid
 
 from db.session import get_db
 from schemas import ApiResponse, PaginatedData, ConversationCreate, ConversationUpdate
-from models import Conversation, Message, Application
+from models import Conversation, Message, Application, Tenant, TenantStatus
 
 
-router = APIRouter(prefix="/conversations", tags=["Conversations"])
+router = APIRouter(tags=["Conversations"])
 
 
 # ============================================================
@@ -64,6 +64,7 @@ def message_to_response(msg: Message) -> dict:
 
 @router.get("/", response_model=ApiResponse[PaginatedData[dict]])
 async def list_conversations(
+    request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
     app_id: Optional[str] = None,
@@ -72,8 +73,24 @@ async def list_conversations(
     db: AsyncSession = Depends(get_db)
 ):
     """获取对话列表"""
+    # Get tenant_id from request context
+    tenant_context = getattr(request.state, "tenant_context", None)
+    
     query = select(Conversation)
     count_query = select(func.count(Conversation.id))
+    
+    # For master key, get first active tenant
+    if tenant_context and tenant_context.is_master:
+        result = await db.execute(
+            select(Tenant).where(Tenant.status == TenantStatus.ACTIVE).limit(1)
+        )
+        tenant = result.scalar_one_or_none()
+        if tenant:
+            query = query.where(Conversation.tenant_id == tenant.id)
+            count_query = count_query.where(Conversation.tenant_id == tenant.id)
+    elif tenant_context and tenant_context.tenant_id:
+        query = query.where(Conversation.tenant_id == tenant_context.tenant_id)
+        count_query = count_query.where(Conversation.tenant_id == tenant_context.tenant_id)
     
     if app_id:
         query = query.where(Conversation.app_id == app_id)
@@ -112,11 +129,30 @@ async def list_conversations(
 @router.post("/", response_model=ApiResponse[dict])
 async def create_conversation(
     data: ConversationCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """创建新对话"""
+    # Get tenant_id from request context
+    tenant_context = getattr(request.state, "tenant_context", None)
+    
+    # For master key, get first active tenant
+    if tenant_context and tenant_context.is_master:
+        result = await db.execute(
+            select(Tenant).where(Tenant.status == TenantStatus.ACTIVE).limit(1)
+        )
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=400, detail="No active tenant found")
+        tenant_id = tenant.id
+    elif tenant_context and tenant_context.tenant_id:
+        tenant_id = tenant_context.tenant_id
+    else:
+        raise HTTPException(status_code=400, detail="Tenant ID is required")
+    
     conversation = Conversation(
         id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
         title=data.title or "新对话",
         app_id=data.app_id,
         user_id=data.user_id,

@@ -78,6 +78,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/metrics"
     }
     
+    # WebSocket paths (handled separately in endpoint)
+    WEBSOCKET_PREFIXES = [
+        "/ws",
+        "/api/v1/ws",
+        "/api/v1/chat",  # WebSocket chat endpoint
+        "/api/v1/stream",  # WebSocket stream endpoint
+    ]
+    
     # Paths that allow optional auth
     OPTIONAL_AUTH_PATHS = {
         # Add paths where auth is optional
@@ -99,8 +107,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         
         # Skip authentication for WebSocket (handled separately)
-        if request.url.path.startswith("/ws"):
-            return await call_next(request)
+        for prefix in self.WEBSOCKET_PREFIXES:
+            if request.url.path.startswith(prefix):
+                return await call_next(request)
         
         # Skip for static files
         if request.url.path.startswith("/static"):
@@ -272,6 +281,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         "/metrics"
     }
     
+    # WebSocket paths (handled separately in WebSocket endpoint)
+    WEBSOCKET_PREFIXES = [
+        "/ws",
+        "/api/v1/ws",
+        "/api/v1/chat",  # WebSocket chat endpoint
+        "/api/v1/stream",  # WebSocket stream endpoint
+    ]
+    
     async def dispatch(self, request: Request, call_next):
         """
         Process request through middleware
@@ -288,8 +305,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         
         # Skip authentication for WebSocket (handled separately)
-        if request.url.path.startswith("/ws"):
-            return await call_next(request)
+        for prefix in self.WEBSOCKET_PREFIXES:
+            if request.url.path.startswith(prefix):
+                return await call_next(request)
         
         # Skip for static files
         if request.url.path.startswith("/static"):
