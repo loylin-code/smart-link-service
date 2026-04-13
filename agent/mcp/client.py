@@ -193,11 +193,13 @@ class SSEMCPClient(MCPClient):
         super().__init__(config)
         self.endpoint = config.get("endpoint", "")
         self.headers = config.get("headers", {})
+        self.timeout = config.get("timeout", 30)
+        self.client: Optional[Any] = None
     
     async def connect(self):
         """Connect to remote MCP server"""
         import httpx
-        self.client = httpx.AsyncClient(headers=self.headers)
+        self.client = httpx.AsyncClient(headers=self.headers, timeout=self.timeout)
         self.connected = True
         
         # Initialize
@@ -214,7 +216,7 @@ class SSEMCPClient(MCPClient):
     
     async def disconnect(self):
         """Disconnect from server"""
-        if hasattr(self, 'client'):
+        if self.client:
             await self.client.aclose()
         self.connected = False
     
@@ -222,7 +224,14 @@ class SSEMCPClient(MCPClient):
         """List available tools"""
         response = await self.client.get(f"{self.endpoint}/tools")
         data = response.json()
-        return [MCPTool(**t) for t in data.get("tools", [])]
+        tools = []
+        for tool_data in data.get("tools", []):
+            tools.append(MCPTool(
+                name=tool_data.get("name"),
+                description=tool_data.get("description", ""),
+                input_schema=tool_data.get("inputSchema", {})
+            ))
+        return tools
     
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool"""
@@ -230,13 +239,21 @@ class SSEMCPClient(MCPClient):
             f"{self.endpoint}/tools/call",
             json={"name": name, "arguments": arguments}
         )
-        return response.json()
+        return response.json().get("content", [])
     
     async def list_resources(self) -> List[MCPResource]:
         """List available resources"""
         response = await self.client.get(f"{self.endpoint}/resources")
         data = response.json()
-        return [MCPResource(**r) for r in data.get("resources", [])]
+        resources = []
+        for res_data in data.get("resources", []):
+            resources.append(MCPResource(
+                uri=res_data.get("uri"),
+                name=res_data.get("name"),
+                description=res_data.get("description"),
+                mime_type=res_data.get("mimeType")
+            ))
+        return resources
     
     async def read_resource(self, uri: str) -> Any:
         """Read a resource"""
