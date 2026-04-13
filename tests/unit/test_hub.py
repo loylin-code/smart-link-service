@@ -47,3 +47,57 @@ class TestAgentHub:
         history = hub.get_history(limit=3)
         assert len(history) == 3
         assert history == ["msg3", "msg4", "msg5"]
+
+
+class TestAgentHubMsgHub:
+    """AgentHub with MsgHub wrapper tests"""
+    
+    @pytest.fixture(autouse=True)
+    def reset_hub(self):
+        """Reset AgentHub singleton before each test"""
+        from agent.agentscope.hub import AgentHub
+        AgentHub._instance = None
+        yield
+        AgentHub._instance = None
+    
+    @pytest.mark.asyncio
+    async def test_create_msghub_with_participants(self):
+        """Test that initialize_with_msghub creates MsgHub instance"""
+        from agent.agentscope.hub import AgentHub
+        from unittest.mock import MagicMock, patch
+        
+        hub = AgentHub.get_instance()
+        mock_agents = [MagicMock(name="agent1"), MagicMock(name="agent2")]
+        announcement = {"content": "Welcome to the hub"}
+        
+        with patch('agent.agentscope.hub.MsgHub') as MockMsgHub:
+            mock_msghub_instance = MagicMock()
+            MockMsgHub.return_value = mock_msghub_instance
+            
+            await hub.initialize_with_msghub(mock_agents, announcement)
+            
+            assert hub._msghub is not None
+            MockMsgHub.assert_called_once_with(
+                participants=mock_agents,
+                announcement=announcement
+            )
+    
+    @pytest.mark.asyncio
+    async def test_broadcast_message(self):
+        """Test that broadcast sends message to MsgHub"""
+        from agent.agentscope.hub import AgentHub
+        from unittest.mock import MagicMock, patch
+        
+        hub = AgentHub.get_instance()
+        
+        with patch('agent.agentscope.hub.MsgHub') as MockMsgHub:
+            mock_msghub_instance = MagicMock()
+            mock_msghub_instance.broadcast = AsyncMock()
+            MockMsgHub.return_value = mock_msghub_instance
+            
+            await hub.initialize_with_msghub([], {"content": "init"})
+            
+            test_msg = MagicMock(name="test_message")
+            await hub.broadcast(test_msg)
+            
+            mock_msghub_instance.broadcast.assert_called_once_with(test_msg)
