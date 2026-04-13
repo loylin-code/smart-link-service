@@ -11,6 +11,36 @@ from schemas.mcp import (
     MCPServerRefreshResponse
 )
 
+from schemas.agent_design import (
+    # Bindings
+    ExpressionBinding,
+    StateBinding,
+    # Events
+    EventHandler,
+    EventBinding,
+    StateUpdateConfig,
+    ApiCallConfig,
+    # Loop & Slots
+    LoopConfig,
+    SlotContent,
+    # Styles
+    StyleConfig,
+    StyleDefinition,
+    # Components
+    ComponentNode,
+    ScriptDefinition,
+    # Page
+    PageSchema,
+    # Requests/Responses
+    SchemaUpdateRequest,
+    SchemaResponse,
+    ComponentAddRequest,
+    ComponentUpdateRequest,
+    ValidationResult,
+    PreviewRequest,
+    PreviewResult,
+)
+
 from schemas.common import (
     ApiResponse,
     PaginatedData,
@@ -67,6 +97,37 @@ __all__ = [
     "MCPConnectResult",
     "MCPServerTestResponse",
     "MCPServerRefreshResponse",
+    # Agent design schemas
+    "ExpressionBinding",
+    "StateBinding",
+    "EventHandler",
+    "EventBinding",
+    "StateUpdateConfig",
+    "ApiCallConfig",
+    "LoopConfig",
+    "SlotContent",
+    "StyleConfig",
+    "StyleDefinition",
+    "ComponentNode",
+    "ScriptDefinition",
+    "PageSchema",
+    "SchemaUpdateRequest",
+    "SchemaResponse",
+    "ComponentAddRequest",
+    "ComponentUpdateRequest",
+    "ValidationResult",
+    "PreviewRequest",
+    "PreviewResult",
+    # Agent schemas
+    "AgentIdentity",
+    "AgentCapabilities",
+    "AgentKnowledge",
+    "AgentCreate",
+    "AgentUpdate",
+    "AgentResponse",
+    "AgentListParams",
+    "AgentRuntimeStatusResponse",
+    "agent_to_response",
     # Common schemas
     "ApiResponse",
     "PaginatedData",
@@ -100,14 +161,4 @@ __all__ = [
     "RegisterRequest",
     "TokenResponse",
     "UserResponse",
-    # Agent schemas
-    "AgentIdentity",
-    "AgentCapabilities",
-    "AgentKnowledge",
-    "AgentCreate",
-    "AgentUpdate",
-    "AgentResponse",
-    "AgentListParams",
-    "AgentRuntimeStatusResponse",
-    "agent_to_response",
 ]
