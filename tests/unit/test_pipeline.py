@@ -1,11 +1,6 @@
 """PipelineManager 单元测试"""
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-import sys
-import os
-
-# Add project root to path for direct imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
 class TestPipelineManager:
@@ -82,3 +77,17 @@ class TestPipelineManager:
         assert PipelineType.SINGLE.value == "single"
         assert PipelineType.SEQUENTIAL.value == "sequential"
         assert PipelineType.PARALLEL.value == "parallel"
+    
+    @pytest.mark.asyncio
+    async def test_execute_empty_agents_raises_error(self):
+        """测试空 Agent 列表抛出异常"""
+        from agent.agentscope.pipeline import PipelineManager, PipelineType
+        
+        manager = PipelineManager()
+        
+        with pytest.raises(ValueError, match="No agents provided"):
+            await manager.execute(
+                agents=[],
+                input_msg=MagicMock(),
+                pipeline_type=PipelineType.SINGLE
+            )

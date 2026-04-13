@@ -31,7 +31,13 @@ class PipelineManager:
             
         Returns:
             单个或多个消息响应
+            
+        Raises:
+            ValueError: 无 Agent 或未知的管道类型
         """
+        if not agents:
+            raise ValueError("No agents provided for execution")
+        
         if pipeline_type == PipelineType.SINGLE:
             return await agents[0](input_msg)
         
@@ -61,7 +67,13 @@ class PipelineManager:
             
         Yields:
             响应块
+            
+        Raises:
+            ValueError: 无 Agent 或未知的管道类型
         """
+        if not agents:
+            raise ValueError("No agents provided for execution")
+        
         if pipeline_type == PipelineType.SINGLE:
             result = await agents[0](input_msg)
             yield result
