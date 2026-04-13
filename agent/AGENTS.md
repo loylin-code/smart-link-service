@@ -8,12 +8,16 @@ AgentScope-based execution engine with MessageHub coordination, ReActAgent execu
 
 ```
 agent/
-├── agentscope/           # AgentScope Integration (NEW)
-│   ├── hub.py            # MessageHub coordination
-│   ├── agent_factory.py  # ReActAgent creation
+├── agentscope/           # AgentScope Integration
+│   ├── hub.py            # MsgHub wrapper (Phase 2)
+│   ├── pipeline.py       # PipelineManager (Phase 2)
+│   ├── agent_factory.py  # ReActAgent creation + memory + sub/plan agents
 │   └── toolkit.py        # Skill/MCP registration
+├── memory/               # Memory System (Phase 2)
+│   ├── agentscope_adapter.py  # SessionMemory wrapper
+│   └── manager.py        # Memory management
 ├── core/
-│   ├── orchestrator.py   # Main execution engine (AgentScope-based)
+│   ├── orchestrator.py   # Main execution engine + pipeline execution
 │   └── context.py        # State, messages, tool results
 ├── llm/
 │   └── client.py         # LiteLLM wrapper, streaming
@@ -29,9 +33,15 @@ agent/
 | Task | Location | Notes |
 |------|----------|-------|
 | Create agent | `agentscope/agent_factory.py` | `AgentFactory.create_agent()` |
+| Create agent with memory | `agentscope/agent_factory.py` | `create_agent_with_memory()` |
+| Create SubAgent | `agentscope/agent_factory.py` | `create_sub_agent()` |
+| Create PlanAgent | `agentscope/agent_factory.py` | `create_plan_agent()` |
 | Register skill | `agentscope/toolkit.py` | `AgentToolkit.register_skill()` |
-| Message coordination | `agentscope/hub.py` | `AgentHub` singleton |
+| Message coordination | `agentscope/hub.py` | `AgentHub` (MsgHub wrapper) |
+| Pipeline execution | `agentscope/pipeline.py` | `PipelineManager.execute()` |
+| Session memory | `memory/agentscope_adapter.py` | `SessionMemory` |
 | Execute agent | `core/orchestrator.py` | `AgentOrchestrator.execute()` |
+| Execute pipeline | `core/orchestrator.py` | `execute_pipeline()` |
 | Stream execution | `core/orchestrator.py` | `execute_stream()` yields chunks |
 | Load agent config | `core/orchestrator.py` | `_load_agent_config()` from DB |
 | Context state | `core/context.py` | Messages, variables, results |
@@ -48,10 +58,12 @@ User Request → Orchestrator → AgentFactory → ReActAgent → Toolkit → LL
 
 | Component | Purpose | Key Methods |
 |-----------|---------|-------------|
-| `AgentHub` | Message coordination | `get_instance()`, `initialize()`, `broadcast()` |
-| `AgentFactory` | Agent creation | `create_agent()`, `create_sub_agent()`, `_build_sys_prompt()` |
+| `AgentHub` | MsgHub wrapper for message coordination | `get_instance()`, `initialize_with_msghub()`, `broadcast()` |
+| `PipelineManager` | Multi-agent workflow execution | `execute()`, `execute_stream()` (SINGLE/SEQUENTIAL/PARALLEL) |
+| `SessionMemory` | Session-based conversation memory | `add_message()`, `get_context()`, `clear_session()` |
+| `AgentFactory` | Agent creation | `create_agent()`, `create_agent_with_memory()`, `create_sub_agent()`, `create_plan_agent()` |
 | `AgentToolkit` | Tool registration | `register_skill()`, `register_mcp_server()`, `get_tool_schemas()` |
-| `AgentOrchestrator` | Execution engine | `execute()`, `execute_stream()`, `_load_agent_config()` |
+| `AgentOrchestrator` | Execution engine | `execute()`, `execute_stream()`, `execute_pipeline()`, `_load_agent_config()` |
 
 ## CONVENTIONS
 
