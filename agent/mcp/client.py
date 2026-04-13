@@ -261,6 +261,126 @@ class SSEMCPClient(MCPClient):
         return response.json()
 
 
+class StreamableHttpMCPClient(MCPClient):
+    """
+    MCP client using HTTP POST/GET (StreamableHttp transport)
+    Newer MCP transport without SSE
+    """
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.endpoint = config.get("endpoint", "")
+        self.headers = config.get("headers", {})
+        self.session_id: Optional[str] = None
+        self.client: Optional[Any] = None
+    
+    async def connect(self):
+        """Connect and establish session"""
+        import httpx
+        
+        self.client = httpx.AsyncClient(headers=self.headers)
+        
+        # POST to initialize endpoint (JSON-RPC format)
+        response = await self.client.post(
+            f"{self.endpoint}/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {}
+                }
+            }
+        )
+        response.raise_for_status()
+        data = response.json()
+        self.session_id = data.get("result", {}).get("sessionId")
+        self.connected = True
+        
+        self.tools = await self.list_tools()
+        self.resources = await self.list_resources()
+    
+    async def disconnect(self):
+        """Disconnect from server"""
+        if self.client:
+            await self.client.aclose()
+        self.connected = False
+    
+    async def list_tools(self) -> List[MCPTool]:
+        """List available tools via JSON-RPC POST"""
+        response = await self.client.post(
+            f"{self.endpoint}/mcp",
+            headers={"mcp-session-id": self.session_id} if self.session_id else {},
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {}
+            }
+        )
+        data = response.json()
+        tools = []
+        for tool_data in data.get("result", {}).get("tools", []):
+            tools.append(MCPTool(
+                name=tool_data.get("name"),
+                description=tool_data.get("description", ""),
+                input_schema=tool_data.get("inputSchema", {})
+            ))
+        return tools
+    
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+        """Call tool via POST with session"""
+        response = await self.client.post(
+            f"{self.endpoint}/mcp",
+            headers={"mcp-session-id": self.session_id} if self.session_id else {},
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments}
+            }
+        )
+        return response.json().get("result", {})
+    
+    async def list_resources(self) -> List[MCPResource]:
+        """List available resources"""
+        response = await self.client.post(
+            f"{self.endpoint}/mcp",
+            headers={"mcp-session-id": self.session_id} if self.session_id else {},
+            json={
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "resources/list",
+                "params": {}
+            }
+        )
+        data = response.json()
+        resources = []
+        for res_data in data.get("result", {}).get("resources", []):
+            resources.append(MCPResource(
+                uri=res_data.get("uri"),
+                name=res_data.get("name"),
+                description=res_data.get("description"),
+                mime_type=res_data.get("mimeType")
+            ))
+        return resources
+    
+    async def read_resource(self, uri: str) -> Any:
+        """Read a resource"""
+        response = await self.client.post(
+            f"{self.endpoint}/mcp",
+            headers={"mcp-session-id": self.session_id} if self.session_id else {},
+            json={
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "resources/read",
+                "params": {"uri": uri}
+            }
+        )
+        return response.json().get("result", {})
+
+
 class MCPManager:
     """
     Manager for multiple MCP clients
@@ -277,6 +397,8 @@ class MCPManager:
             client = StdioMCPClient(config)
         elif transport == "sse":
             client = SSEMCPClient(config)
+        elif transport == "http":
+            client = StreamableHttpMCPClient(config)
         else:
             raise MCPError(f"Unknown transport: {transport}")
         

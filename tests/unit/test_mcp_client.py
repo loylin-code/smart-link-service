@@ -54,3 +54,56 @@ class TestSSEMCPClient:
         result = await client.call_tool("get_weather", {"location": "Beijing"})
         
         assert result == [{"type": "text", "text": "Sunny, 25C"}]
+
+
+class TestStreamableHttpMCPClient:
+    """Test StreamableHttp MCP client."""
+    
+    @pytest.mark.asyncio
+    async def test_connect_establishes_session(self):
+        """Test StreamableHttpMCPClient connect gets session."""
+        from agent.mcp.client import StreamableHttpMCPClient
+        
+        client = StreamableHttpMCPClient({
+            "name": "http-server",
+            "endpoint": "http://test.example.com/mcp"
+        })
+        
+        mock_response = MagicMock()
+        mock_response.json = MagicMock(return_value={
+            "result": {"sessionId": "session-123"}
+        })
+        mock_response.raise_for_status = MagicMock()
+        
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.get = AsyncMock(return_value=MagicMock(
+            json=lambda: {"tools": [{"name": "test_tool"}]}
+        ))
+        mock_client.aclose = AsyncMock()
+        
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            await client.connect()
+        
+        assert client.connected
+        assert client.session_id == "session-123"
+    
+    @pytest.mark.asyncio
+    async def test_call_tool_with_session_header(self):
+        """Test call_tool includes session header."""
+        from agent.mcp.client import StreamableHttpMCPClient
+        
+        client = StreamableHttpMCPClient({"endpoint": "http://test"})
+        client.connected = True
+        client.session_id = "session-123"
+        
+        mock_response = MagicMock()
+        mock_response.json = MagicMock(return_value={"result": {"output": "data"}})
+        
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        client.client = mock_client
+        
+        result = await client.call_tool("test", {"arg": "val"})
+        
+        assert result == {"output": "data"}
