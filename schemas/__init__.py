@@ -6,7 +6,9 @@ from schemas.mcp import (
     MCPServerUpdate,
     MCPServerResponse,
     MCPToolResponse,
-    MCPConnectResult
+    MCPConnectResult,
+    MCPServerTestResponse,
+    MCPServerRefreshResponse
 )
 
 from schemas.common import (
@@ -63,6 +65,8 @@ __all__ = [
     "MCPServerResponse",
     "MCPToolResponse",
     "MCPConnectResult",
+    "MCPServerTestResponse",
+    "MCPServerRefreshResponse",
     # Common schemas
     "ApiResponse",
     "PaginatedData",

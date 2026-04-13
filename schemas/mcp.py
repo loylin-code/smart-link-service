@@ -58,3 +58,17 @@ class MCPConnectResult(BaseModel):
     connected: bool
     tools: Optional[int] = None
     error: Optional[str] = None
+
+
+class MCPServerTestResponse(BaseModel):
+    """MCP server test response."""
+    success: bool
+    response_time: int
+    error: Optional[str] = None
+
+
+class MCPServerRefreshResponse(BaseModel):
+    """MCP server refresh response."""
+    tools: int
+    resources: int
+    prompts: int = 0

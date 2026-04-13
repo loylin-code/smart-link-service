@@ -2,7 +2,7 @@
 API v1 module initialization
 """
 from fastapi import APIRouter
-from gateway.api.v1 import applications, resources, websocket, auth, conversations, agents
+from gateway.api.v1 import applications, resources, websocket, auth, conversations, agents, mcp_servers
 
 api_router = APIRouter()
 
@@ -39,4 +39,10 @@ api_router.include_router(
 api_router.include_router(
     websocket.router,
     tags=["WebSocket"]
+)
+
+api_router.include_router(
+    mcp_servers.router,
+    prefix="/mcp-servers",
+    tags=["MCP Servers"]
 )
