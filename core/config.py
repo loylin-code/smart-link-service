@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     
     # MCP
     MCP_SERVERS_DIR: str = "./mcp_servers"
+    MCP_SERVERS_URL: str = ""
     
     # CORS - Allow frontend development servers
     CORS_ORIGINS: List[str] = [

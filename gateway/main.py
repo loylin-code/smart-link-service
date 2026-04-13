@@ -8,10 +8,13 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 import uvicorn
 import redis.asyncio as redis
+import yaml
+import os
+from sqlalchemy import select
 
 from core.config import settings
 from core.exceptions import SmartLinkException
-from db import init_db, close_db
+from db import init_db, close_db, async_session_maker
 from gateway.api import api_router
 from gateway.middleware.auth import AuthMiddleware
 from gateway.middleware.logging import LoggingMiddleware
@@ -24,6 +27,108 @@ from services.session_manager import session_manager
 from agent.mcp.client import mcp_manager
 from agent.distribution import init_distribution
 from agent.llm.resolver import init_model_resolver
+from agent.agentscope.toolkit import AgentToolkit
+from models.application import MCPServer, ResourceStatus
+
+
+async def load_mcp_servers() -> AgentToolkit:
+    """
+    Load MCP servers on application startup from 3 sources:
+    1. Database (MCPServer table with ACTIVE status)
+    2. Config file (config/mcp_servers.yml)
+    3. Environment variable (MCP_SERVERS_URL comma-separated)
+    
+    Returns:
+        AgentToolkit with registered MCP servers
+    """
+    toolkit = AgentToolkit()
+    
+    async with async_session_maker() as session:
+        # 1. Load from database
+        print("[MCP] Loading MCP servers from database...")
+        db_servers = await session.execute(
+            select(MCPServer).where(MCPServer.status == ResourceStatus.ACTIVE)
+        )
+        
+        for server in db_servers.scalars().all():
+            try:
+                # Build config from database
+                config = {
+                    "name": str(server.name),
+                    "type": str(server.type) if server.type else "stdio",
+                    **(server.config or {})
+                }
+                if server.endpoint:
+                    config["endpoint"] = str(server.endpoint)
+                
+                # Register with MCP manager
+                client = await mcp_manager.register_client(str(server.name), config)
+                
+                # Register with toolkit
+                await toolkit.register_mcp_server(client)
+                print(f"[MCP] Registered: {server.name} (database)")
+            except Exception as e:
+                # Update server status to INACTIVE
+                try:
+                    server.status = ResourceStatus.INACTIVE  # type: ignore
+                    await session.flush()
+                except Exception:
+                    pass  # Ignore update error, continue with other servers
+                print(f"[MCP] Failed to register {server.name}: {str(e)[:100]}")
+        
+        # 2. Load from config file
+        config_file = os.path.join(os.getcwd(), "config", "mcp_servers.yml")
+        if os.path.exists(config_file):
+            print(f"[MCP] Loading MCP servers from {config_file}...")
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config_data = yaml.safe_load(f)
+                
+                if config_data and 'mcp_servers' in config_data:
+                    for server_config in config_data['mcp_servers']:
+                        if not server_config:  # Skip commented out entries
+                            continue
+                        
+                        name = server_config.get('name', 'unknown')
+                        try:
+                            # Register with MCP manager
+                            client = await mcp_manager.register_client(name, server_config)
+                            
+                            # Register with toolkit
+                            await toolkit.register_mcp_server(client)
+                            print(f"[MCP] Registered: {name} (config file)")
+                        except Exception as e:
+                            print(f"[MCP] Failed to register {name}: {str(e)[:100]}")
+            except Exception as e:
+                print(f"[MCP] Error reading config file: {str(e)[:100]}")
+        
+        # 3. Load from environment variable
+        env_urls = settings.MCP_SERVERS_URL
+        if env_urls:
+            print("[MCP] Loading MCP servers from environment...")
+            for url in env_urls.split(','):
+                url = url.strip()
+                if not url:
+                    continue
+                
+                name = url.split('/')[-1] or 'unknown'
+                try:
+                    config = {
+                        "name": name,
+                        "type": "http",
+                        "endpoint": url
+                    }
+                    
+                    # Register with MCP manager
+                    client = await mcp_manager.register_client(name, config)
+                    
+                    # Register with toolkit
+                    await toolkit.register_mcp_server(client)
+                    print(f"[MCP] Registered: {name} (environment)")
+                except Exception as e:
+                    print(f"[MCP] Failed to register {name}: {str(e)[:100]}")
+    
+    return toolkit
 
 
 @asynccontextmanager
@@ -90,6 +195,12 @@ async def lifespan(app: FastAPI):
     print("[MODEL] Initializing model resolver...")
     init_model_resolver()
     print("[OK] Model resolver initialized")
+    
+    # Load MCP servers
+    print("[MCP] Loading MCP servers...")
+    toolkit = await load_mcp_servers()
+    app.state.toolkit = toolkit
+    print("[OK] MCP servers loaded")
     
     print(f"[READY] {settings.APP_NAME} is ready!")
     
@@ -217,7 +328,7 @@ async def health_check():
     # Add system stats
     lane_registry = get_lane_registry()
     if lane_registry:
-        stats["lane_stats"] = lane_registry.get_global_stats()
+        stats["lane_stats"] = jsonable_encoder(lane_registry.get_global_stats())
     
     queue_manager = get_queue_manager()
     if queue_manager:
