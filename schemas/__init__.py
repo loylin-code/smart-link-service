@@ -1,6 +1,14 @@
 """
 Schemas module initialization
 """
+from schemas.mcp import (
+    MCPServerCreate,
+    MCPServerUpdate,
+    MCPServerResponse,
+    MCPToolResponse,
+    MCPConnectResult
+)
+
 from schemas.common import (
     ApiResponse,
     PaginatedData,
@@ -24,11 +32,6 @@ from schemas.common import (
     SkillResponse,
     SkillTestRequest,
     SkillTestResponse,
-    MCPServerCreate,
-    MCPServerUpdate,
-    MCPServerResponse,
-    MCPServerTestResponse,
-    MCPServerRefreshResponse,
     ComponentResponse,
     WSMessage,
     ChatRequest,
@@ -54,6 +57,13 @@ from schemas.agent import (
 )
 
 __all__ = [
+    # MCP Server schemas
+    "MCPServerCreate",
+    "MCPServerUpdate",
+    "MCPServerResponse",
+    "MCPToolResponse",
+    "MCPConnectResult",
+    # Common schemas
     "ApiResponse",
     "PaginatedData",
     "PaginationParams",
@@ -76,11 +86,6 @@ __all__ = [
     "SkillResponse",
     "SkillTestRequest",
     "SkillTestResponse",
-    "MCPServerCreate",
-    "MCPServerUpdate",
-    "MCPServerResponse",
-    "MCPServerTestResponse",
-    "MCPServerRefreshResponse",
     "ComponentResponse",
     "WSMessage",
     "ChatRequest",
