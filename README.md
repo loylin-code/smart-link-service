@@ -511,10 +511,11 @@ docker-compose exec redis redis-cli ping
 - [x] Skill插件系统
 - [x] WebSocket支持
 - [x] Docker部署
+- [x] AgentScope集成 (Phase 2)
+- [x] MCP Server完整集成 (SSE + HTTP传输)
 
 ### 🚧 进行中
 
-- [ ] MCP Server完整集成
 - [ ] 工作流可视化编辑后端支持
 - [ ] 更完善的错误处理
 - [ ] 单元测试覆盖
