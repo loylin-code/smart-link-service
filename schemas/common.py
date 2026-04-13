@@ -3,7 +3,7 @@ Pydantic schemas for API request/response validation
 Aligned with frontend expectations
 """
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Generic, TypeVar
+from typing import Any, Dict, List, Literal, Optional, Generic, TypeVar
 from pydantic import BaseModel, Field, ConfigDict
 
 # Import enums from models
@@ -371,6 +371,28 @@ class StreamResponseData(BaseModel):
     conversation_id: Optional[str] = None
     message_id: Optional[str] = None
     component: Optional[Any] = None
+
+
+# ============================================================
+# Pipeline & Streaming Schemas
+# ============================================================
+
+class PipelineChatRequest(BaseModel):
+    """Chat request with pipeline support."""
+    message: str
+    pipeline_type: Literal["single", "sequential", "parallel"] = "single"
+    sub_agents: Optional[list[str]] = None
+    app_id: str
+    conversation_id: Optional[str] = None
+    attachments: Optional[list[dict]] = None
+
+
+class StreamChunk(BaseModel):
+    """Streamed response chunk with agent attribution."""
+    type: Literal["token", "tool_call", "tool_result", "complete", "error", "status"]
+    data: dict
+    agent_name: Optional[str] = None
+    timestamp: int
 
 
 # ============================================================
