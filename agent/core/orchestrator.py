@@ -154,6 +154,187 @@ class AgentOrchestrator:
         finally:
             self.is_executing = False
     
+    async def execute_pipeline(
+        self,
+        agents: List[str],
+        input_data: Dict[str, Any],
+        pipeline_type: "PipelineType",
+        memory: Optional[Dict[str, Any]] = None,
+        conversation_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Execute multi-agent pipeline workflow
+        
+        Args:
+            agents: List of agent IDs to execute in pipeline
+            input_data: Input data containing message and optional parameters
+            pipeline_type: Type of pipeline (SINGLE, SEQUENTIAL, PARALLEL)
+            memory: Optional shared memory dict between agents
+            conversation_id: Optional conversation ID for context
+            
+        Returns:
+            Execution result dictionary with type, pipeline_type, results, and memory
+            
+        Raises:
+            AgentError: If execution fails
+        """
+        self.is_executing = True
+        try:
+            # Import PipelineManager
+            from agent.agentscope.pipeline import PipelineManager, PipelineType
+            from agentscope.pipeline import FanoutPipeline
+            from agentscope.message import Msg
+            
+            # Create pipeline manager
+            pipeline_manager = PipelineManager()
+            
+            # Load all agent configs and create agents
+            created_agents = []
+            for agent_id in agents:
+                role_config = await self._load_agent_config(agent_id)
+                toolkit = await self._create_toolkit(role_config)
+                
+                # Build system prompt
+                identity = role_config.get("identity", {})
+                sys_prompt = self.factory._build_sys_prompt(identity, {})
+                
+                # Get LLM config
+                capabilities = role_config.get("capabilities", {})
+                llm_config = capabilities.get("llm", {})
+                model_name = llm_config.get("model", "gpt-4")
+                
+                # Create agent
+                agent = await self.factory.create_agent(
+                    model_name=model_name,
+                    sys_prompt=sys_prompt,
+                    tools=toolkit.get_tool_schemas() if toolkit.get_tool_schemas() else None
+                )
+                created_agents.append(agent)
+            
+            # Build input message
+            input_msg = Msg(
+                name="user",
+                content=input_data.get("message", ""),
+                role="user"
+            )
+            
+            # Execute pipeline and collect results based on type
+            results_list = []
+            
+            if pipeline_type == PipelineType.SINGLE:
+                result = await created_agents[0](input_msg)
+                results_list = [{"content": getattr(result, 'content', str(result))}]
+            
+            elif pipeline_type == PipelineType.SEQUENTIAL:
+                # Execute sequentially and collect each agent's result
+                current_msg = input_msg
+                for agent in created_agents:
+                    result = await agent(current_msg)
+                    results_list.append({"content": getattr(result, 'content', str(result))})
+                    current_msg = result  # Pass result to next agent
+            
+            elif pipeline_type == PipelineType.PARALLEL:
+                # Execute in parallel using FanoutPipeline
+                pipeline = FanoutPipeline(agents=created_agents, enable_gather=True)
+                result = await pipeline(input_msg)
+                if isinstance(result, list):
+                    results_list = [
+                        {"content": getattr(msg, 'content', str(msg))}
+                        for msg in result
+                    ]
+                else:
+                    results_list = [{"content": getattr(result, 'content', str(result))}]
+            
+            response = {
+                "type": "pipeline_response",
+                "pipeline_type": pipeline_type.value,
+                "results": results_list,
+                "memory": memory
+            }
+            
+            return response
+            
+        except Exception as e:
+            raise AgentError(f"Pipeline execution failed: {str(e)}")
+        finally:
+            self.is_executing = False
+    
+    async def execute_pipeline_stream(
+        self,
+        agents: List[str],
+        input_data: Dict[str, Any],
+        pipeline_type: "PipelineType",
+        memory: Optional[Dict[str, Any]] = None
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Execute multi-agent pipeline with streaming response
+        
+        Args:
+            agents: List of agent IDs to execute in pipeline
+            input_data: Input data containing message
+            pipeline_type: Type of pipeline (SINGLE, SEQUENTIAL, PARALLEL)
+            memory: Optional shared memory dict between agents
+            
+        Yields:
+            Streaming chunks with type, content, and done flag
+        """
+        self.is_executing = True
+        try:
+            # Import PipelineManager
+            from agent.agentscope.pipeline import PipelineManager, PipelineType
+            from agentscope.message import Msg
+            
+            # Create pipeline manager
+            pipeline_manager = PipelineManager()
+            
+            # Load all agent configs and create agents
+            created_agents = []
+            for agent_id in agents:
+                role_config = await self._load_agent_config(agent_id)
+                toolkit = await self._create_toolkit(role_config)
+                
+                # Build system prompt
+                identity = role_config.get("identity", {})
+                sys_prompt = self.factory._build_sys_prompt(identity, {})
+                
+                # Get LLM config
+                capabilities = role_config.get("capabilities", {})
+                llm_config = capabilities.get("llm", {})
+                model_name = llm_config.get("model", "gpt-4")
+                
+                # Create agent
+                agent = await self.factory.create_agent(
+                    model_name=model_name,
+                    sys_prompt=sys_prompt,
+                    tools=toolkit.get_tool_schemas() if toolkit.get_tool_schemas() else None
+                )
+                created_agents.append(agent)
+            
+            # Build input message
+            input_msg = Msg(
+                name="user",
+                content=input_data.get("message", ""),
+                role="user"
+            )
+            
+            # Stream pipeline execution
+            async for chunk in pipeline_manager.execute_stream(
+                created_agents,
+                input_msg,
+                pipeline_type
+            ):
+                yield {
+                    "type": "chunk",
+                    "content": getattr(chunk, 'content', str(chunk)),
+                    "done": False
+                }
+            
+            # Send completion marker
+            yield {"type": "complete", "content": "", "done": True}
+            
+        except Exception as e:
+            yield {"type": "error", "content": str(e), "done": True}
+        finally:
+            self.is_executing = False
+    
     async def _load_agent_config(self, agent_id: str) -> Dict[str, Any]:
         """Load agent configuration from database
         
