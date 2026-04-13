@@ -82,8 +82,8 @@ class ConnectionManager:
         if client_id in self.active_connections:
             del self.active_connections[client_id]
         
-        # Remove from app mappings
-        for app_id, clients in self.app_clients.items():
+        # Remove from app mappings (iterate over copy of items)
+        for app_id, clients in list(self.app_clients.items()):
             clients.discard(client_id)
             if not clients:
                 del self.app_clients[app_id]

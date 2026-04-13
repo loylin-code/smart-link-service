@@ -5,7 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
-from db.session import get_db
+from db.session import async_session_maker
 from gateway.websocket.manager import manager
 from gateway.websocket.handlers import handle_chat_message, handle_ping
 from gateway.middleware.auth import verify_api_key_ws
@@ -54,10 +54,13 @@ async def websocket_chat(
     
     try:
         # Get database session
-        async with get_db() as db:
+        async with async_session_maker() as db:
+            logger.info(f"Client {client_id} entering message loop")
             while True:
                 # Receive message
+                logger.info(f"Client {client_id} waiting for message...")
                 data = await websocket.receive_json()
+                logger.info(f"Client {client_id} received: {data}")
                 
                 message_type = data.get("type")
                 message_data = data.get("data", {})
@@ -69,7 +72,9 @@ async def websocket_chat(
                     await handle_chat_message(client_id, message_data, db)
                     
                 elif message_type == "ping":
+                    logger.info(f"Client {client_id} handling ping")
                     await handle_ping(client_id)
+                    logger.info(f"Client {client_id} pong sent")
                     
                 else:
                     await manager.send_personal_message({
