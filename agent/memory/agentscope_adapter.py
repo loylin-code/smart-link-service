@@ -51,9 +51,17 @@ class SessionMemory:
             role: Message role (user, assistant, system)
             content: Message content
             name: Optional message name/identifier
+            
+        Raises:
+            RuntimeError: If failed to add message to session memory
         """
-        msg = Msg(role=role, content=content, name=name)
-        await self._memory.add(msg)
+        try:
+            msg = Msg(role=role, content=content, name=name)
+            await self._memory.add(msg)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to add message to session {self._session_id} for user {self._user_id}: {e}"
+            ) from e
     
     async def get_context(self) -> List[Msg]:
         """
@@ -61,8 +69,16 @@ class SessionMemory:
         
         Returns:
             List of Msg objects representing conversation history
+            
+        Raises:
+            RuntimeError: If failed to get conversation context
         """
-        return await self._memory.get_history()
+        try:
+            return await self._memory.get_history()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to get context for session {self._session_id} for user {self._user_id}: {e}"
+            ) from e
     
     async def get_message_count(self) -> int:
         """
@@ -76,5 +92,13 @@ class SessionMemory:
     async def clear_session(self) -> None:
         """
         Clear all messages from session memory
+        
+        Raises:
+            RuntimeError: If failed to clear session memory
         """
-        await self._memory.clear()
+        try:
+            await self._memory.clear()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to clear session {self._session_id} for user {self._user_id}: {e}"
+            ) from e
