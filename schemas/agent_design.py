@@ -22,7 +22,7 @@ class StateBinding(BaseModel):
     """状态绑定"""
     model_config = ConfigDict(populate_by_name=True)
     
-    state_key: str = Field(..., alias="statePath", description="State path key")
+    state_key: str = Field(..., alias="stateKey", description="State path key")
     transform: Optional[Dict[str, str]] = Field(default=None, description="Get/set transform functions")
 
 
@@ -83,7 +83,7 @@ class LoopConfig(BaseModel):
     """循环配置"""
     model_config = ConfigDict(populate_by_name=True)
     
-    items: ExpressionBinding = Field(..., alias="source", description="Loop source expression")
+    items: str = Field(..., alias="source", description="Loop source expression")
     item_name: str = Field(..., alias="itemName", description="Current item variable name")
     index_name: Optional[str] = Field(default=None, alias="indexName", description="Index variable name")
     key: Optional[str] = Field(default=None, description="Key field for list rendering")
