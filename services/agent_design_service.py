@@ -191,7 +191,7 @@ class AgentDesignService:
             return False
         
         # Remove node from parent's children
-        removed = AgentDesignService._remove_node(schema.root, node_id)  # type: ignore[unused-call-result]
+        removed = AgentDesignService._remove_node(schema.root, node_id)
         if not removed:
             return False
         
@@ -243,7 +243,7 @@ class AgentDesignService:
         # Check if any direct child matches
         for i, child in enumerate(root.children):
             if child.id == node_id:
-                root.children.pop(i)
+                _ = root.children.pop(i)
                 return True
         
         # Recursively search in children
