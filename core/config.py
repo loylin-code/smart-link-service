@@ -113,6 +113,20 @@ class Settings(BaseSettings):
     DEFAULT_LLM_PROVIDER: str = "openai"
     DEFAULT_LLM_MODEL: str = "gpt-4o-mini"
     
+    # LLM Caching
+    LLM_CACHE_ENABLED: bool = Field(
+        default=True,
+        description="Enable LLM response caching"
+    )
+    LLM_CACHE_TTL: int = Field(
+        default=3600,
+        description="Cache TTL in seconds (default: 1 hour)"
+    )
+    LLM_CACHE_DB: str = Field(
+        default="cache.db",
+        description="SQLite cache database file path"
+    )
+
     # MCP
     MCP_SERVERS_DIR: str = "./mcp_servers"
     MCP_SERVERS_URL: str = ""
