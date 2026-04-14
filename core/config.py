@@ -145,10 +145,36 @@ class Settings(BaseSettings):
     ENABLE_METRICS: bool = True
     METRICS_PORT: int = 9090
     
-    # Logging
-    LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: str = "json"
-    
+    # Logging Configuration
+    LOG_LEVEL: str = Field(
+        default="INFO",
+        description="Log level: DEBUG/INFO/WARNING/ERROR/CRITICAL"
+    )
+    LOG_FORMAT: str = Field(
+        default="json",
+        description="Log format: 'json' for structured, 'text' for plain"
+    )
+    LOG_DIR: str = Field(
+        default="logs",
+        description="Directory for log files"
+    )
+    LOG_STDOUT: bool = Field(
+        default=True,
+        description="Enable stdout logging (for container collection)"
+    )
+    LOG_FILE: bool = Field(
+        default=True,
+        description="Enable file logging"
+    )
+    LOG_MAX_SIZE: int = Field(
+        default=10 * 1024 * 1024,  # 10MB
+        description="Maximum log file size in bytes"
+    )
+    LOG_BACKUP_COUNT: int = Field(
+        default=5,
+        description="Number of backup log files to keep"
+    )
+
     # Session
     SESSION_EXPIRE_SECONDS: int = 86400  # 24 hours
     
