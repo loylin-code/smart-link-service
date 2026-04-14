@@ -2,10 +2,12 @@
 SmartLink Agent Management Platform - Main Application
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from datetime import datetime
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import HTTPException
 import uvicorn
 import redis.asyncio as redis
 import yaml
@@ -19,6 +21,7 @@ from gateway.api import api_router
 from gateway.middleware.auth import AuthMiddleware
 from gateway.middleware.logging import LoggingMiddleware
 from gateway.middleware.rate_limit import RateLimitMiddleware
+from gateway.middleware.request_id import RequestIDMiddleware
 from gateway.websocket.manager import manager
 from gateway.websocket.lane import init_lane_registry
 from gateway.websocket.router import init_router
@@ -263,7 +266,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware (order matters: last added = first executed)
+# Add custom middleware (order matters: first added = last executed)
+app.add_middleware(RequestIDMiddleware)  # First - generates request_id
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuthMiddleware)
 if settings.RATE_LIMIT_ENABLED:
@@ -272,21 +276,53 @@ if settings.RATE_LIMIT_ENABLED:
 
 # Exception handlers
 @app.exception_handler(SmartLinkException)
-async def smartlink_exception_handler(request, exc: SmartLinkException):
-    """Handle custom exceptions"""
+async def smartlink_exception_handler(request: Request, exc: SmartLinkException):
+    """Handle custom exceptions with proper HTTP status codes"""
     return JSONResponse(
-        status_code=400,
+        status_code=exc.status_code,
         content={
             "code": exc.code,
             "message": exc.message,
-            "details": exc.details
+            "details": exc.details,
+            "timestamp": int(datetime.utcnow().timestamp() * 1000),
+            "requestId": getattr(request.state, "request_id", "unknown"),
+            "path": str(request.url.path)
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle FastAPI HTTPExceptions with unified format"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "code": f"HTTP_{exc.status_code}",
+            "message": exc.detail,
+            "details": {},
+            "timestamp": int(datetime.utcnow().timestamp() * 1000),
+            "requestId": getattr(request.state, "request_id", "unknown"),
+            "path": str(request.url.path)
         }
     )
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request, exc: Exception):
+async def general_exception_handler(request: Request, exc: Exception):
     """Handle unexpected exceptions"""
+    request_id = getattr(request.state, "request_id", "unknown")
+    
+    # Log the error with request context
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.exception(
+        f"Unexpected error: {exc}",
+        extra={
+            "request_id": request_id,
+            "path": str(request.url.path)
+        }
+    )
+    
     if settings.DEBUG:
         import traceback
         return JSONResponse(
@@ -294,7 +330,10 @@ async def general_exception_handler(request, exc: Exception):
             content={
                 "code": "INTERNAL_ERROR",
                 "message": str(exc),
-                "traceback": traceback.format_exc()
+                "details": {"traceback": traceback.format_exc()},
+                "timestamp": int(datetime.utcnow().timestamp() * 1000),
+                "requestId": request_id,
+                "path": str(request.url.path)
             }
         )
     
@@ -302,7 +341,11 @@ async def general_exception_handler(request, exc: Exception):
         status_code=500,
         content={
             "code": "INTERNAL_ERROR",
-            "message": "An unexpected error occurred"
+            "message": "An unexpected error occurred",
+            "details": {},
+            "timestamp": int(datetime.utcnow().timestamp() * 1000),
+            "requestId": request_id,
+            "path": str(request.url.path)
         }
     )
 
