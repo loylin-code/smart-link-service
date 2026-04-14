@@ -41,6 +41,35 @@ async_session_maker = async_sessionmaker(
 Base = declarative_base()
 
 
+# Cache database (separate SQLite file for LLM response caching)
+CACHE_DATABASE_URL = f"sqlite+aiosqlite:///./{settings.LLM_CACHE_DB}"
+
+cache_engine = create_async_engine(
+    CACHE_DATABASE_URL,
+    echo=settings.DEBUG,
+    future=True,
+)
+
+cache_session_maker = async_sessionmaker(
+    cache_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+
+async def init_cache_db():
+    """Initialize cache database - create cache table"""
+    async with cache_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+async def close_cache_db():
+    """Close cache database connections"""
+    await cache_engine.dispose()
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency for getting database session
