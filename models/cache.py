@@ -1,7 +1,7 @@
 """
 LLM Cache entry model for storing cached LLM responses
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy import Column, String, Text, Integer, DateTime
 import uuid
 
@@ -31,7 +31,7 @@ class LLMCacheEntry(Base):
     model = Column(String(50), nullable=False)
     provider = Column(String(50), nullable=False)
     tokens_used = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
     
     def to_dict(self) -> dict:

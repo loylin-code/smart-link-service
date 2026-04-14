@@ -3,7 +3,7 @@ LLM response cache service with SQLite storage and lazy expiration
 """
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from uuid import uuid4
 
@@ -16,6 +16,11 @@ from core.config import settings
 from agent.cache.keygen import generate_cache_key
 
 logger = logging.getLogger(__name__)
+
+
+def utcnow() -> datetime:
+    """Get current UTC time as timezone-naive datetime (for SQLite compatibility)"""
+    return datetime.utcnow()
 
 
 class LLMCache:
@@ -79,8 +84,8 @@ class LLMCache:
                 if entry is None:
                     return None  # Cache miss
                 
-                # Lazy expiration check
-                if entry.expires_at <= datetime.now(timezone.utc):
+                # Lazy expiration check (use utcnow for SQLite compatibility)
+                if entry.expires_at <= utcnow():
                     # Delete expired entry
                     await session.execute(
                         delete(LLMCacheEntry).where(LLMCacheEntry.cache_key == cache_key)
@@ -124,7 +129,7 @@ class LLMCache:
             return False
         
         cache_key = generate_cache_key(system_prompt, user_message, model)
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=self.ttl)
+        expires_at = utcnow() + timedelta(seconds=self.ttl)
         
         try:
             async with cache_session_maker() as session:
