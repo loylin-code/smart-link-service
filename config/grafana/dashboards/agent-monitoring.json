@@ -1,0 +1,99 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "title": "SmartLink Agent Monitoring",
+  "uid": "smartlink-agent",
+  "version": 1,
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "rate(agent_executions_total[5m])",
+          "legendFormat": "{{agent_type}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent Executions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(agent_execution_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 {{agent_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent Execution Duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "rate(agent_llm_tokens_total{token_type=\"input\"}[5m])",
+          "legendFormat": "Input {{model}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(agent_llm_tokens_total{token_type=\"output\"}[5m])",
+          "legendFormat": "Output {{model}}",
+          "refId": "B"
+        }
+      ],
+      "title": "LLM Token Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "websocket_connections_active",
+          "legendFormat": "Active connections",
+          "refId": "A"
+        }
+      ],
+      "title": "WebSocket Connections",
+      "type": "gauge"
+    }
+  ],
+  "schemaVersion": 38,
+  "tags": ["smartlink", "agent"],
+  "refresh": "10s"
+}
