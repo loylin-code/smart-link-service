@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 import uvicorn
 import redis.asyncio as redis
 import yaml
@@ -22,6 +23,7 @@ from gateway.middleware.auth import AuthMiddleware
 from gateway.middleware.logging import LoggingMiddleware
 from gateway.middleware.rate_limit import RateLimitMiddleware
 from gateway.middleware.request_id import RequestIDMiddleware
+from gateway.middleware.metrics import MetricsMiddleware
 from gateway.websocket.manager import manager
 from gateway.websocket.lane import init_lane_registry
 from gateway.websocket.router import init_router
@@ -267,7 +269,8 @@ app.add_middleware(
 )
 
 # Add custom middleware (order matters: first added = last executed)
-app.add_middleware(RequestIDMiddleware)  # First - generates request_id
+app.add_middleware(MetricsMiddleware)  # Prometheus metrics collection
+app.add_middleware(RequestIDMiddleware)  # Generates request_id
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuthMiddleware)
 if settings.RATE_LIMIT_ENABLED:
@@ -347,6 +350,23 @@ async def general_exception_handler(request: Request, exc: Exception):
             "requestId": request_id,
             "path": str(request.url.path)
         }
+    )
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics")
+async def metrics_endpoint():
+    """
+    Prometheus metrics endpoint.
+    
+    Returns metrics in Prometheus text format for scraping.
+    No authentication required (standard Prometheus practice).
+    """
+    metrics_output = generate_latest(REGISTRY)
+    return Response(
+        content=metrics_output,
+        media_type=CONTENT_TYPE_LATEST,
+        headers={"Cache-Control": "no-cache"}
     )
 
 
