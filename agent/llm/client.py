@@ -7,6 +7,7 @@ from litellm import acompletion
 
 from core.config import settings
 from core.exceptions import LLMError
+from agent.cache import llm_cache
 
 
 class LLMClient:
@@ -74,7 +75,7 @@ class LLMClient:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Send chat completion request
+        Send chat completion request with caching.
         
         Args:
             messages: List of message dicts with role and content
@@ -87,6 +88,30 @@ class LLMClient:
         Returns:
             Response dict with content, tool_calls, usage
         """
+        # Initialize cache if needed
+        if llm_cache.enabled and not llm_cache._initialized:
+            await llm_cache.initialize()
+        
+        # Extract prompts for cache key
+        system_prompt = next(
+            (m.get('content', '') for m in messages if m.get('role') == 'system'),
+            ""
+        )
+        user_message = next(
+            (m.get('content', '') for m in messages if m.get('role') == 'user'),
+            ""
+        )
+        
+        # Check cache (only if no tools - tool calls vary)
+        if llm_cache.enabled and not tools:
+            cached = await llm_cache.get(
+                system_prompt=system_prompt,
+                user_message=user_message,
+                model=self.model
+            )
+            if cached:
+                return cached  # Cache hit
+        
         try:
             # Build request
             request_params = {
@@ -116,7 +141,7 @@ class LLMClient:
             }
             
             # Extract tool calls if present
-            if hasattr(message, "tool_calls") and message.tool_calls:
+            if hasattr(message, 'tool_calls') and message.tool_calls:
                 result["tool_calls"] = [
                     {
                         "id": tc.id,
@@ -130,12 +155,23 @@ class LLMClient:
                 ]
             
             # Add usage info
-            if hasattr(response, "usage"):
+            if hasattr(response, 'usage'):
                 result["usage"] = {
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens
                 }
+            
+            # Store in cache (only if no tools)
+            if llm_cache.enabled and not tools:
+                await llm_cache.set(
+                    system_prompt=system_prompt,
+                    user_message=user_message,
+                    model=self.model,
+                    provider=self.provider,
+                    response=result,
+                    tokens_used=result.get("usage", {}).get("total_tokens", 0)
+                )
             
             return result
             
