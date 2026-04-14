@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db
+from schemas.agent import AgentCapabilities, AgentKnowledge
 from schemas.agent_design import (
     SchemaUpdateRequest,
     SchemaResponse,
@@ -92,27 +93,27 @@ async def delete_component(
     return {"data": {"success": True}}
 
 
-@router.put("/{agent_id}/capabilities")
+@router.put("/{agent_id}/capabilities", response_model=dict[str, Any])
 async def update_capabilities(
     agent_id: str,
-    capabilities: dict[str, Any],
+    capabilities: AgentCapabilities,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update agent capabilities (MCP skills, tools, LLM config)."""
-    result = await AgentService.update_capabilities(db, agent_id, capabilities)
+    result = await AgentService.update_capabilities(db, agent_id, capabilities.model_dump())
     if result is None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
     return {"data": {"success": True}}
 
 
-@router.put("/{agent_id}/knowledge")
+@router.put("/{agent_id}/knowledge", response_model=dict[str, Any])
 async def update_knowledge(
     agent_id: str,
-    knowledge: dict[str, Any],
+    knowledge: AgentKnowledge,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update agent knowledge sources."""
-    result = await AgentService.update_knowledge(db, agent_id, knowledge)
+    result = await AgentService.update_knowledge(db, agent_id, knowledge.model_dump())
     if result is None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
     return {"data": {"success": True}}
