@@ -127,6 +127,16 @@ class Settings(BaseSettings):
         description="SQLite cache database file path"
     )
 
+    # Agent Cache Configuration
+    AGENT_CACHE_ENABLED: bool = Field(
+        default=True,
+        description="Enable agent config caching"
+    )
+    AGENT_CACHE_TTL: int = Field(
+        default=3600,
+        description="Agent config cache TTL in seconds (default: 1 hour)"
+    )
+
     # MCP
     MCP_SERVERS_DIR: str = "./mcp_servers"
     MCP_SERVERS_URL: str = ""
