@@ -9,6 +9,7 @@ from agent.agentscope.hub import AgentHub
 from agent.agentscope.agent_factory import AgentFactory
 from agent.agentscope.toolkit import AgentToolkit
 from agent.core.context import AgentContext
+from agent.cache import agent_config_cache
 from core.exceptions import AgentError
 from db.session import async_session_maker
 
@@ -336,7 +337,7 @@ class AgentOrchestrator:
             self.is_executing = False
     
     async def _load_agent_config(self, agent_id: str) -> Dict[str, Any]:
-        """Load agent configuration from database
+        """Load agent configuration from cache or database
         
         Args:
             agent_id: Agent ID to load
@@ -347,6 +348,16 @@ class AgentOrchestrator:
         Raises:
             AgentError: If agent not found
         """
+        # Initialize cache if needed
+        if agent_config_cache.enabled and not agent_config_cache._initialized:
+            await agent_config_cache.initialize()
+        
+        # Check cache first
+        cached = await agent_config_cache.get_config(agent_id)
+        if cached:
+            return cached  # Cache hit
+        
+        # Cache miss - load from database
         async with async_session_maker() as db:
             from models.agent import Agent
             from sqlalchemy import select
@@ -357,7 +368,12 @@ class AgentOrchestrator:
             if not agent:
                 raise AgentError(f"Agent {agent_id} not found", agent_id=agent_id)
             
-            return agent.to_dict()
+            config = agent.to_dict()
+            
+            # Store in cache
+            await agent_config_cache.set_config(agent_id, config)
+            
+            return config
     
     async def _create_toolkit(self, role_config: Dict[str, Any]) -> AgentToolkit:
         """Create toolkit with registered skills
