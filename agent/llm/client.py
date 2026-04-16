@@ -1,6 +1,8 @@
 """
 LLM client with multi-provider support using LiteLLM
 """
+import asyncio
+import logging
 from typing import Dict, Any, List, Optional, AsyncIterator
 import litellm
 from litellm import acompletion
@@ -8,6 +10,9 @@ from litellm import acompletion
 from core.config import settings
 from core.exceptions import LLMError
 from agent.cache import llm_cache
+from agent.llm.retry import is_retryable_error, get_wait_time
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -28,6 +33,9 @@ class LLMClient:
         # Set default provider and model
         self.provider = self.config.get("provider", settings.DEFAULT_LLM_PROVIDER)
         self.model = self.config.get("model", settings.DEFAULT_LLM_MODEL)
+        
+        # Retry configuration
+        self.max_retries = settings.LLM_MAX_RETRIES
         
         # Configure LiteLLM
         self._configure_litellm()
@@ -75,7 +83,7 @@ class LLMClient:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Send chat completion request with caching.
+        Send chat completion request with caching and retry.
         
         Args:
             messages: List of message dicts with role and content
@@ -112,74 +120,106 @@ class LLMClient:
             if cached:
                 return cached  # Cache hit
         
-        try:
-            # Build request
-            request_params = {
-                "model": self._get_model_string(),
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            }
-            
-            # Add tools if provided
-            if tools:
-                request_params["tools"] = tools
-                request_params["tool_choice"] = tool_choice
-            
-            # Add extra params
-            request_params.update(kwargs)
-            
-            # Call LLM
-            response = await acompletion(**request_params)
-            
-            # Extract result
-            message = response.choices[0].message
-            
-            result = {
-                "content": message.content or "",
-                "role": message.role,
-            }
-            
-            # Extract tool calls if present
-            if hasattr(message, 'tool_calls') and message.tool_calls:
-                result["tool_calls"] = [
-                    {
-                        "id": tc.id,
-                        "type": tc.type,
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments
-                        }
-                    }
-                    for tc in message.tool_calls
-                ]
-            
-            # Add usage info
-            if hasattr(response, 'usage'):
-                result["usage"] = {
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens
+        # Retry loop
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Build request
+                request_params = {
+                    "model": self._get_model_string(),
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
                 }
-            
-            # Store in cache (only if no tools)
-            if llm_cache.enabled and not tools:
-                await llm_cache.set(
-                    system_prompt=system_prompt,
-                    user_message=user_message,
-                    model=self.model,
-                    provider=self.provider,
-                    response=result,
-                    tokens_used=result.get("usage", {}).get("total_tokens", 0)
+                
+                # Add tools if provided
+                if tools:
+                    request_params["tools"] = tools
+                    request_params["tool_choice"] = tool_choice
+                
+                # Add extra params
+                request_params.update(kwargs)
+                
+                # Call LLM
+                response = await acompletion(**request_params)
+                
+                # Extract result
+                message = response.choices[0].message
+                
+                result = {
+                    "content": message.content or "",
+                    "role": message.role,
+                }
+                
+                # Extract tool calls if present
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    result["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": tc.type,
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        }
+                        for tc in message.tool_calls
+                    ]
+                
+                # Add usage info
+                if hasattr(response, 'usage'):
+                    result["usage"] = {
+                        "prompt_tokens": response.usage.prompt_tokens,
+                        "completion_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens
+                    }
+                
+                # Store in cache (only if no tools)
+                if llm_cache.enabled and not tools:
+                    await llm_cache.set(
+                        system_prompt=system_prompt,
+                        user_message=user_message,
+                        model=self.model,
+                        provider=self.provider,
+                        response=result,
+                        tokens_used=result.get("usage", {}).get("total_tokens", 0)
+                    )
+                
+                return result
+                
+            except Exception as e:
+                # Check if retryable
+                if not is_retryable_error(e):
+                    # Non-retryable error - raise immediately
+                    raise LLMError(
+                        f"LLM request failed (non-retryable): {str(e)}",
+                        provider=self.provider
+                    )
+                
+                # Check if max retries exhausted
+                if attempt >= self.max_retries:
+                    raise LLMError(
+                        f"LLM request failed after {self.max_retries} retries: {str(e)}",
+                        provider=self.provider
+                    )
+                
+                # Calculate wait time
+                wait_time = get_wait_time(e, attempt)
+                
+                # Log retry attempt
+                logger.warning(
+                    f"LLM call failed, retrying",
+                    extra={
+                        "attempt": attempt + 1,
+                        "max_retries": self.max_retries,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "wait_seconds": wait_time,
+                        "provider": self.provider,
+                        "model": self.model,
+                    }
                 )
-            
-            return result
-            
-        except Exception as e:
-            raise LLMError(
-                f"LLM request failed: {str(e)}",
-                provider=self.provider
-            )
+                
+                # Wait before retry
+                await asyncio.sleep(wait_time)
     
     async def chat_stream(
         self,
