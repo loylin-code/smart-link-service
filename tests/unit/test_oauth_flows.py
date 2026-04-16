@@ -3,6 +3,9 @@ import pytest
 import sys
 import os
 from unittest.mock import AsyncMock, patch, MagicMock
+import hashlib
+import json
+from datetime import datetime, timedelta
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -283,3 +286,284 @@ class TestAuthorizationCodeFlowCallback:
                     )
                 
                 assert "Tenant ID required" in str(exc_info.value)
+
+
+class TestClientCredentialsFlowAuthenticate:
+    """ClientCredentialsFlow.authenticate() 测试"""
+
+    @pytest.mark.asyncio
+    async def test_client_authenticate_success(self, async_session):
+        """测试成功认证 client credentials"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        
+        # Create a test client
+        client_id = "test_client_id_001"
+        client_secret = "test_secret_abc123"
+        secret_hash = hashlib.sha256(client_secret.encode()).hexdigest()
+        
+        client = OAuthClient(
+            id="client-001",
+            tenant_id="tenant-001",
+            client_id=client_id,
+            secret_hash=secret_hash,
+            name="Test Service Client",
+            allowed_scopes=json.dumps(["app:read", "app:execute"]),
+            is_active=True
+        )
+        async_session.add(client)
+        await async_session.commit()
+        
+        # Authenticate
+        flow = ClientCredentialsFlow(async_session)
+        result = await flow.authenticate(
+            client_id=client_id,
+            client_secret=client_secret,
+            scope="app:read"
+        )
+        
+        # Verify result structure
+        assert "access_token" in result
+        assert "token_type" in result
+        assert "expires_in" in result
+        assert "scope" in result
+        
+        assert result["token_type"] == "Bearer"
+        assert result["expires_in"] == 3600
+        assert result["scope"] == "app:read"
+
+    @pytest.mark.asyncio
+    async def test_client_authenticate_invalid_client_id(self, async_session):
+        """测试无效 client_id 抛出异常"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from core.exceptions import AuthenticationError
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        with pytest.raises(AuthenticationError) as exc_info:
+            await flow.authenticate(
+                client_id="nonexistent_client",
+                client_secret="any_secret"
+            )
+        
+        assert "Invalid client_id" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_client_authenticate_invalid_secret(self, async_session):
+        """测试无效 client_secret 抛出异常"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        from core.exceptions import AuthenticationError
+        
+        # Create a test client
+        client_id = "test_client_invalid_secret"
+        client_secret = "correct_secret"
+        secret_hash = hashlib.sha256(client_secret.encode()).hexdigest()
+        
+        client = OAuthClient(
+            id="client-invalid-secret",
+            tenant_id="tenant-001",
+            client_id=client_id,
+            secret_hash=secret_hash,
+            name="Test Client",
+            allowed_scopes=json.dumps(["app:read"]),
+            is_active=True
+        )
+        async_session.add(client)
+        await async_session.commit()
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        with pytest.raises(AuthenticationError) as exc_info:
+            await flow.authenticate(
+                client_id=client_id,
+                client_secret="wrong_secret"
+            )
+        
+        assert "Invalid client_secret" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_client_authenticate_expired(self, async_session):
+        """测试过期 client 抛出异常"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        from core.exceptions import AuthenticationError
+        
+        # Create an expired client
+        client_id = "expired_client"
+        client_secret = "expired_secret"
+        secret_hash = hashlib.sha256(client_secret.encode()).hexdigest()
+        
+        client = OAuthClient(
+            id="client-expired",
+            tenant_id="tenant-001",
+            client_id=client_id,
+            secret_hash=secret_hash,
+            name="Expired Client",
+            allowed_scopes=json.dumps(["app:read"]),
+            is_active=True,
+            expires_at=datetime.utcnow() - timedelta(days=1)  # Already expired
+        )
+        async_session.add(client)
+        await async_session.commit()
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        with pytest.raises(AuthenticationError) as exc_info:
+            await flow.authenticate(
+                client_id=client_id,
+                client_secret=client_secret
+            )
+        
+        assert "expired" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_client_authenticate_scope_denied(self, async_session):
+        """测试请求不允许的 scope 抛出异常"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        from core.exceptions import AuthenticationError
+        
+        # Create a client with limited scopes
+        client_id = "limited_scope_client"
+        client_secret = "limited_secret"
+        secret_hash = hashlib.sha256(client_secret.encode()).hexdigest()
+        
+        client = OAuthClient(
+            id="client-limited",
+            tenant_id="tenant-001",
+            client_id=client_id,
+            secret_hash=secret_hash,
+            name="Limited Scope Client",
+            allowed_scopes=json.dumps(["app:read"]),
+            is_active=True
+        )
+        async_session.add(client)
+        await async_session.commit()
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        # Try to request a scope not allowed
+        with pytest.raises(AuthenticationError) as exc_info:
+            await flow.authenticate(
+                client_id=client_id,
+                client_secret=client_secret,
+                scope="app:read app:delete"  # app:delete not allowed
+            )
+        
+        assert "Scope not allowed" in str(exc_info.value)
+        assert "app:delete" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_client_authenticate_all_allowed_scopes(self, async_session):
+        """测试无 scope 参数时返回所有允许的 scope"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        
+        # Create a client
+        client_id = "all_scopes_client"
+        client_secret = "all_scopes_secret"
+        secret_hash = hashlib.sha256(client_secret.encode()).hexdigest()
+        
+        client = OAuthClient(
+            id="client-all-scopes",
+            tenant_id="tenant-001",
+            client_id=client_id,
+            secret_hash=secret_hash,
+            name="All Scopes Client",
+            allowed_scopes=json.dumps(["app:read", "app:execute", "conversation:create"]),
+            is_active=True
+        )
+        async_session.add(client)
+        await async_session.commit()
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        # Authenticate without specifying scope
+        result = await flow.authenticate(
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        
+        # Should get all allowed scopes
+        assert result["scope"] == "app:read app:execute conversation:create"
+
+
+class TestClientCredentialsFlowCreateClient:
+    """ClientCredentialsFlow.create_client() 测试"""
+
+    @pytest.mark.asyncio
+    async def test_client_create_client(self, async_session):
+        """测试创建 OAuth 客户端"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        from sqlalchemy import select
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        result = await flow.create_client(
+            tenant_id="tenant-new-001",
+            name="New Service Client",
+            allowed_scopes=["app:read", "app:execute", "conversation:create"],
+            expires_days=365
+        )
+        
+        # Verify result structure
+        assert "client_id" in result
+        assert "client_secret" in result
+        
+        # Verify client_id format
+        assert result["client_id"].startswith("client_")
+        
+        # Verify client_secret is returned (only shown once)
+        assert len(result["client_secret"]) >= 32
+        
+        # Verify client was persisted
+        db_result = await async_session.execute(
+            select(OAuthClient).where(OAuthClient.client_id == result["client_id"])
+        )
+        db_client = db_result.scalar_one_or_none()
+        
+        assert db_client is not None
+        assert db_client.tenant_id == "tenant-new-001"
+        assert db_client.name == "New Service Client"
+        assert db_client.is_active == True
+        
+        # Verify secret hash matches
+        expected_hash = hashlib.sha256(result["client_secret"].encode()).hexdigest()
+        assert db_client.secret_hash == expected_hash
+        
+        # Verify scopes
+        scopes = json.loads(db_client.allowed_scopes)
+        assert scopes == ["app:read", "app:execute", "conversation:create"]
+        
+        # Verify expiration
+        assert db_client.expires_at is not None
+        expected_expiry = datetime.utcnow() + timedelta(days=365)
+        # Allow 1 minute tolerance for test execution time
+        assert abs((db_client.expires_at - expected_expiry).total_seconds()) < 60
+
+    @pytest.mark.asyncio
+    async def test_client_create_without_expiration(self, async_session):
+        """测试创建永不过期的 OAuth 客户端"""
+        from auth.flows.client_credentials import ClientCredentialsFlow
+        from models.oauth import OAuthClient
+        from sqlalchemy import select
+        
+        flow = ClientCredentialsFlow(async_session)
+        
+        result = await flow.create_client(
+            tenant_id="tenant-no-expire",
+            name="No Expiration Client",
+            allowed_scopes=["app:read"],
+            expires_days=None
+        )
+        
+        # Verify client was persisted
+        db_result = await async_session.execute(
+            select(OAuthClient).where(OAuthClient.client_id == result["client_id"])
+        )
+        db_client = db_result.scalar_one_or_none()
+        
+        assert db_client is not None
+        assert db_client.expires_at is None

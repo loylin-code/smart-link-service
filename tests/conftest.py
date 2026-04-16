@@ -37,6 +37,7 @@ async def async_session():
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
     from sqlalchemy.ext.asyncio import AsyncSession
     from auth.providers.state import OAuthState  # Import to register model
+    from models.oauth import OAuthClient  # Import to register model
     
     # 使用内存 SQLite 进行测试
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
