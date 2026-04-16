@@ -137,6 +137,20 @@ class Settings(BaseSettings):
         description="Agent config cache TTL in seconds (default: 1 hour)"
     )
 
+    # LLM Retry Configuration
+    LLM_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum retry attempts for LLM calls"
+    )
+    LLM_RETRY_BASE_DELAY: float = Field(
+        default=1.0,
+        description="Base delay for exponential backoff (seconds)"
+    )
+    LLM_RETRY_MAX_DELAY: float = Field(
+        default=10.0,
+        description="Maximum delay between retries (seconds)"
+    )
+
     # MCP
     MCP_SERVERS_DIR: str = "./mcp_servers"
     MCP_SERVERS_URL: str = ""
