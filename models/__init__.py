@@ -44,6 +44,8 @@ from models.agent import (
     AgentType as AgentTypeEnum
 )
 
+from models.oauth import OAuthClient
+
 __all__ = [
     # Application models
     "Application",
@@ -83,4 +85,7 @@ __all__ = [
     "AgentRuntimeStatus",
     "AgentStatus",
     "AgentTypeEnum",
+    
+    # OAuth models
+    "OAuthClient",
 ]
