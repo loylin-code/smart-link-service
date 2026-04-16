@@ -1,6 +1,11 @@
 """
 AgentScope-based Orchestrator
 Replaces original orchestrator with AgentScope integration
+
+Enhanced with Agent Intelligence Core:
+- PlanAgent routing layer
+- SubAgent Pool for role-based execution
+- MessageHub for agent communication
 """
 from typing import Dict, Any, Optional, AsyncIterator, List
 from datetime import datetime
@@ -21,6 +26,11 @@ class AgentOrchestrator:
     - AgentHub: Central message coordination for multi-agent conversations
     - AgentFactory: Creates and configures AgentScope agents
     - AgentToolkit: Registers and manages Skills and MCP tools
+    
+    Enhanced with Agent Intelligence Core:
+    - PlanAgent: Pre-routing layer for intent recognition and task routing
+    - SubAgentPool: Role-based execution agents (research/code/data/doc)
+    - MessageHub: In-memory queue for agent communication
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -34,6 +44,140 @@ class AgentOrchestrator:
         self.factory = AgentFactory()
         self.context = AgentContext()
         self.is_executing = False
+        
+        # Agent Intelligence Core components (optional)
+        self.plan_agent: Optional[Any] = None
+        self.subagent_pool: Optional[Any] = None
+        self.message_hub: Optional[Any] = None
+        self._routing_enabled = False
+    
+    async def initialize_routing(
+        self,
+        llm_client: Any,
+        memory_manager: Any
+    ) -> None:
+        """Initialize Agent Intelligence routing components
+        
+        Args:
+            llm_client: LLM client for PlanAgent
+            memory_manager: Memory manager for context
+        """
+        from agent.core.plan_agent import PlanAgent
+        from agent.core.message_hub import MessageHub
+        from agent.subagents.pool import SubAgentPool
+        
+        # Create toolkit for SubAgents
+        toolkit = AgentToolkit()
+        
+        # Initialize components
+        self.plan_agent = PlanAgent(llm_client, memory_manager)
+        self.message_hub = MessageHub()
+        self.subagent_pool = SubAgentPool(llm_client, toolkit, memory_manager)
+        
+        self._routing_enabled = True
+    
+    async def execute_with_routing(
+        self,
+        agent_id: str,
+        input_data: Dict[str, Any],
+        conversation_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Execute agent with intelligent routing
+        
+        Flow:
+        1. PlanAgent processes input → ExecutionPlan
+        2. MessageHub dispatches plan → SubAgentPool
+        3. SubAgents execute tasks → Results
+        4. Aggregate results → Final response
+        
+        Args:
+            agent_id: Agent ID (for context/config loading)
+            input_data: Input data with message
+            conversation_id: Conversation ID
+            
+        Returns:
+            Execution result with routing metadata
+            
+        Raises:
+            AgentError: If routing not enabled or execution fails
+        """
+        if not self._routing_enabled:
+            raise AgentError("Routing not initialized. Call initialize_routing() first.")
+        
+        self.is_executing = True
+        try:
+            # Load agent config for context
+            role_config = await self._load_agent_config(agent_id)
+            
+            # Build context
+            context = {
+                "agent_id": agent_id,
+                "role_config": role_config,
+                "input_data": input_data
+            }
+            
+            # 1. PlanAgent processes input
+            plan = await self.plan_agent.process(
+                user_input=input_data.get("message", ""),
+                conversation_id=conversation_id or "",
+                context=context
+            )
+            
+            # 2. MessageHub executes plan
+            results = await self.message_hub.dispatch_plan(plan, self.subagent_pool)
+            
+            # 3. Build routing result
+            return self._build_routing_result(plan, results)
+            
+        except AgentError:
+            raise
+        except Exception as e:
+            raise AgentError(f"Routing execution failed: {str(e)}", agent_id=agent_id)
+        finally:
+            self.is_executing = False
+    
+    def _build_routing_result(
+        self,
+        plan: Any,
+        results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build result from routing execution
+        
+        Args:
+            plan: ExecutionPlan from PlanAgent
+            results: Dict of task_id -> SubAgentResult
+            
+        Returns:
+            Result dictionary with routing metadata
+        """
+        # Aggregate content from all successful results
+        content_parts = []
+        for task_id, result in results.items():
+            if result.success:
+                content_parts.append(result.content)
+        
+        return {
+            "type": "routing_response",
+            "content": "\n".join(content_parts),
+            "routing": {
+                "plan": {
+                    "tasks": [t.model_dump() for t in plan.tasks],
+                    "assignments": plan.assignments
+                },
+                "results": {
+                    task_id: {
+                        "success": result.success,
+                        "content": result.content,
+                        "execution_time": result.execution_time
+                    }
+                    for task_id, result in results.items()
+                }
+            },
+            "metadata": {
+                "total_tasks": len(plan.tasks),
+                "successful_tasks": sum(1 for r in results.values() if r.success)
+            }
+        }
     
     async def execute(
         self,
