@@ -34,6 +34,7 @@ from agent.distribution import init_distribution
 from agent.llm.resolver import init_model_resolver
 from agent.agentscope.toolkit import AgentToolkit
 from models.application import MCPServer, ResourceStatus
+from auth.providers.registry import ProviderRegistry
 
 
 async def load_mcp_servers() -> AgentToolkit:
@@ -200,6 +201,36 @@ async def lifespan(app: FastAPI):
     print("[MODEL] Initializing model resolver...")
     init_model_resolver()
     print("[OK] Model resolver initialized")
+    
+    # Initialize OAuth Provider configuration
+    if settings.GOOGLE_CLIENT_ID:
+        print("[OAUTH] Configuring Google provider...")
+        ProviderRegistry.configure(
+            "google",
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET or ""
+        )
+    
+    if settings.GITHUB_CLIENT_ID:
+        print("[OAUTH] Configuring GitHub provider...")
+        ProviderRegistry.configure(
+            "github",
+            client_id=settings.GITHUB_CLIENT_ID,
+            client_secret=settings.GITHUB_CLIENT_SECRET or ""
+        )
+    
+    if settings.GITLAB_CLIENT_ID:
+        print("[OAUTH] Configuring GitLab provider...")
+        ProviderRegistry.configure(
+            "gitlab",
+            client_id=settings.GITLAB_CLIENT_ID,
+            client_secret=settings.GITLAB_CLIENT_SECRET or ""
+        )
+    
+    if settings.GOOGLE_CLIENT_ID or settings.GITHUB_CLIENT_ID or settings.GITLAB_CLIENT_ID:
+        print("[OK] OAuth providers configured")
+    else:
+        print("[WARN] No OAuth providers configured (set CLIENT_ID env vars to enable)")
     
     # Load MCP servers
     print("[MCP] Loading MCP servers...")

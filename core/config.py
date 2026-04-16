@@ -113,15 +113,21 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # OAuth Providers
+    # OAuth2 Provider 配置
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
-    
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
-    
     GITLAB_CLIENT_ID: Optional[str] = None
     GITLAB_CLIENT_SECRET: Optional[str] = None
+
+    # OAuth2 回调配置
+    OAUTH_CALLBACK_BASE_URL: str = "http://localhost:8000/api/v1/auth/oauth"
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # OAuth2 安全配置
+    OAUTH_STATE_EXPIRE_MINUTES: int = 10
+    OAUTH_CLIENT_DEFAULT_EXPIRE_DAYS: int = 365
     
     # LLM
     OPENAI_API_KEY: Optional[str] = None
