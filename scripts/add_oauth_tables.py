@@ -1,7 +1,6 @@
 """Add OAuth2 tables migration script"""
 import asyncio
 import argparse
-from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -11,7 +10,7 @@ async def migrate(database_url: str) -> None:
     
     async with engine.begin() as conn:
         # 1. 创建 oauth_states 表
-        _ = await conn.execute(text("""
+        await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS oauth_states (
                 id VARCHAR(64) PRIMARY KEY,
                 state VARCHAR(64) UNIQUE NOT NULL,
@@ -24,7 +23,7 @@ async def migrate(database_url: str) -> None:
         """))
         
         # 2. 创建 oauth_clients 表
-        _ = await conn.execute(text("""
+        await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS oauth_clients (
                 id VARCHAR(64) PRIMARY KEY,
                 tenant_id VARCHAR(64) NOT NULL,
@@ -41,17 +40,17 @@ async def migrate(database_url: str) -> None:
         """))
         
         # 3. 创建索引
-        _ = await conn.execute(text("""
+        await conn.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_oauth_states_expires 
             ON oauth_states (expires_at)
         """))
         
-        _ = await conn.execute(text("""
+        await conn.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_oauth_clients_tenant 
             ON oauth_clients (tenant_id)
         """))
         
-        _ = await conn.execute(text("""
+        await conn.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_oauth_clients_client_id 
             ON oauth_clients (client_id)
         """))
