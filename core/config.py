@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "smartlink"
     
+    # Database Connection Pool
+    # Pool size: Number of persistent connections to maintain
+    # Overflow: Additional connections allowed when pool is exhausted
+    # Total max connections = pool_size + overflow
+    # Recommended for production:
+    #   - Low traffic: pool_size=10, overflow=5 (15 total)
+    #   - Medium traffic: pool_size=20, overflow=10 (30 total) - DEFAULT
+    #   - High traffic: pool_size=30, overflow=20 (50 total)
+    # Note: Ensure PostgreSQL max_connections > your pool_size + overflow
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
     
@@ -79,6 +88,13 @@ class Settings(BaseSettings):
         ...,
         description="Redis connection URL"
     )
+    # Redis Connection Pool
+    # Max connections for Redis connection pool
+    # Used for WebSocket pub/sub, session management, caching
+    # Recommended for production:
+    #   - Low traffic: 20-30 connections
+    #   - Medium traffic: 50 connections - DEFAULT
+    #   - High WebSocket concurrency: 100 connections
     REDIS_MAX_CONNECTIONS: int = 50
     
     # Security
