@@ -309,6 +309,11 @@ class MCPServer(Base):
     # Capabilities
     tools = Column(JSON, default=list, nullable=False)  # Available tools
     resources = Column(JSON, default=list, nullable=False)  # Available resources
+    prompts = Column(JSON, default=list, nullable=False)  # Available prompts
+    
+    # Status tracking
+    last_connected_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
