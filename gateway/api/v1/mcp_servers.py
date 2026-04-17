@@ -362,3 +362,39 @@ async def disconnect_mcp_server(
     await db.refresh(server)
     
     return {"data": {"message": "MCP server disconnected"}}
+
+
+@router.get("/{server_id}/tools")
+async def get_mcp_server_tools(
+    server_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """List tools available from MCP Server
+    
+    Args:
+        server_id: MCP Server ID
+        db: Database session
+        
+    Returns:
+        Tools list with total count
+        
+    Raises:
+        HTTPException 400 if server is not active
+        HTTPException 404 if server not found
+    """
+    server = await get_mcp_server_or_404(db, server_id)
+    
+    if server.status != ResourceStatus.ACTIVE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP Server {server_id} is not active"
+        )
+    
+    tools = server.tools or []
+    
+    return {
+        "data": {
+            "tools": tools,
+            "total": len(tools)
+        }
+    }

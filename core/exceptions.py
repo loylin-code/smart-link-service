@@ -1,7 +1,7 @@
 """
 Custom exception classes for SmartLink
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class SmartLinkException(Exception):
@@ -94,13 +94,45 @@ class SkillError(SmartLinkException):
 
 
 class MCPError(SmartLinkException):
-    """MCP related error"""
+    """MCP error with recovery suggestions
+    
+    Attributes:
+        message: Error message
+        suggestions: List of recovery suggestions
+        server_name: MCP Server name (optional)
+        tool_name: MCP Tool name (optional)
+    """
     status_code = 500
     code = "MCP_ERROR"
     
-    def __init__(self, message: str, server_name: Optional[str] = None):
-        details = {"server_name": server_name} if server_name else {}
+    def __init__(
+        self,
+        message: str,
+        suggestions: Optional[List[str]] = None,
+        server_name: Optional[str] = None,
+        tool_name: Optional[str] = None
+    ):
+        details = {}
+        if server_name:
+            details["server_name"] = server_name
+        if tool_name:
+            details["tool_name"] = tool_name
+        if suggestions:
+            details["suggestions"] = suggestions
+        self.suggestions = suggestions or []
+        self.server_name = server_name
+        self.tool_name = tool_name
         super().__init__(message, code=self.code, details=details)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API response"""
+        return {
+            "error": self.message,
+            "type": "mcp_error",
+            "suggestions": self.suggestions,
+            "server_name": self.server_name,
+            "tool_name": self.tool_name
+        }
 
 
 class DatabaseError(SmartLinkException):

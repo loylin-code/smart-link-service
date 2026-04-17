@@ -40,6 +40,7 @@ class MCPServerResponse(BaseModel):
     status: str
     tools: List[Dict[str, Any]] = []
     resources: List[Dict[str, Any]] = []
+    prompts: List[Dict[str, Any]] = []  # MCP Prompts
     last_connected_at: Optional[datetime] = None
     last_error: Optional[str] = None
     created_at: datetime
