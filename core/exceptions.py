@@ -135,6 +135,27 @@ class MCPError(SmartLinkException):
         }
 
 
+class PluginLoadError(SmartLinkException):
+    """Plugin loading error"""
+    status_code = 500
+    code = "PLUGIN_LOAD_ERROR"
+    
+    def __init__(
+        self,
+        message: str,
+        plugin_name: Optional[str] = None,
+        suggestions: Optional[List[str]] = None
+    ):
+        details = {}
+        if plugin_name:
+            details["plugin_name"] = plugin_name
+        if suggestions:
+            details["suggestions"] = suggestions
+        self.suggestions = suggestions or []
+        self.plugin_name = plugin_name
+        super().__init__(message, code=self.code, details=details)
+
+
 class DatabaseError(SmartLinkException):
     """Database operation error"""
     status_code = 503
