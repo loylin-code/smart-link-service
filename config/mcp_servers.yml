@@ -1,16 +1,39 @@
 # MCP Servers Configuration
 # Loaded on startup alongside database MCP servers
+#
+# SmartLink supports 3 MCP transport types:
+# - stdio: Local process communication
+# - sse: Server-Sent Events (HTTP)
+# - streamable_http: HTTP POST/GET
 
 mcp_servers:
-  # Example SSE transport MCP server
-  # - name: "weather-api"
-  #   type: "sse"
-  #   endpoint: "https://api.weather.com/mcp"
-  #   headers:
-  #     Authorization: "Bearer ${WEATHER_API_KEY}"
-  #   timeout: 30
-
-  # Example HTTP transport MCP server
-  # - name: "calendar-service"
-  #   type: "http"
-  #   endpoint: "https://calendar.example.com/mcp"
+  # Example 1: Local stdio MCP server (filesystem)
+  # Requires: pip install mcp-server-filesystem
+  - name: "filesystem"
+    type: "stdio"
+    description: "Local filesystem access"
+    command: "python"
+    args: ["-m", "mcp_server_filesystem"]
+    config:
+      env:
+        ALLOWED_DIRS: "/tmp"
+    status: "active"
+  
+  # Example 2: SSE remote MCP server template
+  - name: "remote-mcp-template"
+    type: "sse"
+    description: "Template for SSE MCP servers"
+    endpoint: "http://localhost:8080/sse"
+    config:
+      headers: {}
+      timeout: 30
+    status: "inactive"
+  
+  # Example 3: StreamableHttp MCP server template
+  - name: "http-mcp-template"
+    type: "streamable_http"
+    description: "Template for HTTP MCP servers"
+    endpoint: "http://localhost:8080/mcp"
+    config:
+      headers: {}
+    status: "inactive"

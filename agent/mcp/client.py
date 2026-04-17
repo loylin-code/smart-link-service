@@ -11,6 +11,81 @@ from core.config import settings
 from core.exceptions import MCPError
 
 
+class MCPRetryMixin:
+    """MCP retry mechanism with exponential backoff
+    
+    Provides automatic retry for transient errors with configurable
+    retry count and delays.
+    """
+    
+    max_retries: int = 3
+    base_delay: float = 1.0
+    max_delay: float = 30.0
+    
+    def _is_retryable(self, error: Exception) -> bool:
+        """Determine if error is retryable
+        
+        Args:
+            error: Exception to check
+            
+        Returns:
+            True if error can be retried
+        """
+        retryable_types = [
+            "ConnectionError",
+            "TimeoutError",
+            "ConnectTimeout",
+            "ReadTimeout"
+        ]
+        
+        error_type = type(error).__name__
+        if error_type in retryable_types:
+            return True
+        
+        if hasattr(error, 'response'):
+            status = getattr(error.response, 'status_code', 0)
+            if 500 <= status < 600:
+                return True
+        
+        try:
+            import httpx
+            if isinstance(error, (httpx.ConnectError, httpx.TimeoutException)):
+                return True
+        except ImportError:
+            pass
+        
+        return False
+    
+    async def _retry_call(self, fn: callable, *args, **kwargs) -> Any:
+        """Execute function with retry on failure
+        
+        Args:
+            fn: Async function to call
+            args: Function arguments
+            kwargs: Function keyword arguments
+            
+        Returns:
+            Function result
+            
+        Raises:
+            Last exception after max retries exhausted
+        """
+        last_error = None
+        
+        for attempt in range(self.max_retries):
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+                if not self._is_retryable(e):
+                    raise
+                if attempt < self.max_retries - 1:
+                    delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+                    await asyncio.sleep(delay)
+        
+        raise last_error
+
+
 class MCPTool(BaseModel):
     """MCP Tool definition"""
     name: str
