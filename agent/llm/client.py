@@ -272,6 +272,107 @@ class LLMClient:
                 provider=self.provider
             )
     
+    async def chat_stream_openai(
+        self,
+        messages: List[Dict[str, str]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = "auto",
+        temperature: Optional[float] = 0.7,
+        max_tokens: Optional[int] = 4096,
+        stream_options: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Stream chat completion in OpenAI format
+        
+        Args:
+            messages: List of message dicts with role and content
+            tools: List of tool definitions (OpenAI format)
+            tool_choice: Tool choice strategy ("auto", "none", "required", or specific)
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            stream_options: Additional streaming options (e.g., {"include_usage": True})
+            **kwargs: Additional parameters
+            
+        Yields:
+            Stream chunks in OpenAI format:
+            {
+                "content": str,           # Text delta
+                "finish_reason": str,      # "stop", "tool_calls", or None
+                "tool_calls": [...],       # Tool calls delta (optional)
+                "usage": {...}             # Usage info in last chunk (optional)
+            }
+        """
+        try:
+            # Build request
+            request_params = {
+                "model": self._get_model_string(),
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            
+            # Add tools if provided
+            if tools:
+                request_params["tools"] = tools
+                request_params["tool_choice"] = tool_choice
+            
+            # Add stream_options if provided
+            if stream_options:
+                request_params["stream_options"] = stream_options
+            
+            # Add extra params
+            request_params.update(kwargs)
+            
+            # Stream response
+            async for chunk in await acompletion(**request_params):
+                delta = chunk.choices[0].delta
+                finish_reason = chunk.choices[0].finish_reason
+                
+                # Build response chunk
+                response_chunk = {
+                    "content": delta.content or "",
+                    "finish_reason": finish_reason,
+                }
+                
+                # Convert tool_calls if present
+                if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                    tool_calls_list = []
+                    for tc in delta.tool_calls:
+                        tool_call_dict = {
+                            "index": tc.index if hasattr(tc, 'index') else 0,
+                            "id": tc.id if hasattr(tc, 'id') else "",
+                            "type": tc.type if hasattr(tc, 'type') else "function",
+                        }
+                        
+                        # Handle function field
+                        if hasattr(tc, 'function') and tc.function:
+                            tool_call_dict["function"] = {
+                                "name": tc.function.name if hasattr(tc.function, 'name') else "",
+                                "arguments": tc.function.arguments if hasattr(tc.function, 'arguments') else ""
+                            }
+                        
+                        tool_calls_list.append(tool_call_dict)
+                    
+                    response_chunk["tool_calls"] = tool_calls_list
+                
+                # Add usage if present (typically in last chunk)
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    response_chunk["usage"] = {
+                        "prompt_tokens": chunk.usage.prompt_tokens,
+                        "completion_tokens": chunk.usage.completion_tokens,
+                        "total_tokens": chunk.usage.total_tokens
+                    }
+                
+                yield response_chunk
+                
+        except Exception as e:
+            raise LLMError(
+                f"LLM streaming (OpenAI format) failed: {str(e)}",
+                provider=self.provider
+            )
+    
     async def embed(
         self,
         texts: List[str],
