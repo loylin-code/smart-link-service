@@ -205,3 +205,182 @@ class RateLimitError(SmartLinkException):
     
     def __init__(self, message: str = "Rate limit exceeded"):
         super().__init__(message, code=self.code)
+
+
+# =============================================================================
+# Streaming Exceptions
+# =============================================================================
+
+
+class StreamError(SmartLinkException):
+    """Base exception for streaming errors"""
+    status_code = 500
+    code = "STREAM_ERROR"
+    
+    def __init__(
+        self,
+        message: str,
+        error_type: str = "server_error",
+        error_code: str = "internal_error",
+        agent_id: Optional[str] = None,
+        execution_id: Optional[str] = None,
+        details: Optional[dict] = None
+    ):
+        self.error_type = error_type
+        self.error_code = error_code
+        self.agent_id = agent_id
+        self.execution_id = execution_id
+        merged_details = {}
+        if agent_id:
+            merged_details["agent_id"] = agent_id
+        if execution_id:
+            merged_details["execution_id"] = execution_id
+        if details:
+            merged_details.update(details)
+        super().__init__(message, code=self.code, details=merged_details if merged_details else None)
+
+
+class AuthenticationError(StreamError):
+    """Authentication error for streaming"""
+    status_code = 401
+    code = "AUTHENTICATION_ERROR"
+    
+    def __init__(self, message: str = "Authentication failed"):
+        super().__init__(
+            message=message,
+            error_type="invalid_request_error",
+            error_code="invalid_api_key"
+        )
+
+
+class RateLimitError(StreamError):
+    """Rate limit error for streaming"""
+    status_code = 429
+    code = "RATE_LIMIT_EXCEEDED"
+    
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        retry_after: Optional[int] = None
+    ):
+        super().__init__(
+            message=message,
+            error_type="rate_limit_error",
+            error_code="rate_limit_exceeded"
+        )
+        self.retry_after = retry_after
+
+
+class AgentNotFoundError(StreamError):
+    """Agent not found error"""
+    status_code = 404
+    code = "AGENT_NOT_FOUND"
+    
+    def __init__(self, agent_id: str):
+        super().__init__(
+            message=f"Agent '{agent_id}' not found",
+            error_type="invalid_request_error",
+            error_code="agent_not_found",
+            agent_id=agent_id
+        )
+
+
+class ExecutionNotFoundError(StreamError):
+    """Execution not found error"""
+    status_code = 404
+    code = "EXECUTION_NOT_FOUND"
+    
+    def __init__(self, execution_id: str):
+        super().__init__(
+            message=f"Execution '{execution_id}' not found",
+            error_type="invalid_request_error",
+            error_code="execution_not_found",
+            execution_id=execution_id
+        )
+
+
+class LLMStreamError(StreamError):
+    """LLM streaming error"""
+    status_code = 500
+    code = "LLM_STREAM_ERROR"
+    
+    def __init__(
+        self,
+        message: str = "LLM stream error",
+        provider: Optional[str] = None
+    ):
+        details = {"provider": provider} if provider else {}
+        super().__init__(
+            message=message,
+            error_type="server_error",
+            error_code="llm_stream_error",
+            details=details
+        )
+        self.provider = provider
+
+
+class ToolExecutionError(StreamError):
+    """Tool execution error during streaming"""
+    status_code = 500
+    code = "TOOL_EXECUTION_ERROR"
+    
+    def __init__(
+        self,
+        message: str = "Tool execution error",
+        tool_name: str = "",
+        tool_call_id: Optional[str] = None
+    ):
+        details = {"tool_name": tool_name}
+        if tool_call_id:
+            details["tool_call_id"] = tool_call_id
+        super().__init__(
+            message=message,
+            error_type="server_error",
+            error_code="tool_execution_error",
+            details=details
+        )
+        self.tool_name = tool_name
+        self.tool_call_id = tool_call_id
+
+
+class ContextLengthExceededError(StreamError):
+    """Context length exceeded error"""
+    status_code = 400
+    code = "CONTEXT_LENGTH_EXCEEDED"
+    
+    def __init__(self, max_tokens: int):
+        super().__init__(
+            message=f"Context length exceeded. Maximum tokens: {max_tokens}",
+            error_type="invalid_request_error",
+            error_code="context_length_exceeded"
+        )
+        self.max_tokens = max_tokens
+
+
+class StreamTimeoutError(StreamError):
+    """Stream timeout error"""
+    status_code = 504
+    code = "STREAM_TIMEOUT"
+    
+    def __init__(self, timeout_seconds: int):
+        super().__init__(
+            message=f"Stream timeout after {timeout_seconds} seconds",
+            error_type="server_error",
+            error_code="stream_timeout"
+        )
+        self.timeout_seconds = timeout_seconds
+
+
+class StreamCancelledError(StreamError):
+    """Stream cancelled error"""
+    status_code = 499
+    code = "STREAM_CANCELLED"
+    
+    def __init__(self, execution_id: str):
+        super().__init__(
+            message="Stream cancelled",
+            error_type="server_error",
+            error_code="stream_cancelled",
+            execution_id=execution_id
+        )
+        self.execution_id = execution_id
