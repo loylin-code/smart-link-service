@@ -16,7 +16,7 @@ from schemas import (
     MCPServerCreate, MCPServerUpdate,
     MCPServerTestResponse, MCPServerRefreshResponse
 )
-from models import Skill, MCPServer, Component, ResourceStatus, SkillFile, SkillVersion
+from models import Skill, MCPServer, Component, ResourceStatus, SkillVersion
 from services.skill_file_service import SkillFileService
 
 
@@ -234,7 +234,7 @@ async def export_skill(skill_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Skill not found")
     
     file_service = SkillFileService(db)
-    zip_content = await file_service.export_skill_zip(skill_id, skill.name)
+    zip_content = await file_service.export_skill_zip(skill_id, skill.name if skill.name else "skill")
     
     return StreamingResponse(
         io.BytesIO(zip_content),
