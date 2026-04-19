@@ -1,6 +1,7 @@
 # Skills 管理优化设计文档
 
 **Created:** 2026-04-19
+**Updated:** 2026-04-20
 **Status:** Draft
 **Reference:** https://github.com/qufei1993/skills-hub
 
@@ -10,10 +11,10 @@
 
 ### 1.1 目标
 
-优化 SmartLink 前端 Skills 管理模块，参考 skills-hub 设计模式，实现：
-- Skills 列表页面（卡片布局 + 筛选 + 搜索）
-- Skill 详情页面（文件树 + Markdown 渲染）
-- 后端 API（支持 SKILL.md 文件存储和渲染）
+优化 SmartLink 前端 Skills 管理模块，参考 skills-hub 和 Nacos Skill Registry 设计模式，实现：
+- Skills 列表页面（表格布局 + 领域筛选 + 搜索）
+- Skill 详情页面（文件树 + Markdown 渲染 + 版本时间线）
+- 后端 API（支持 SKILL.md 文件存储、打包下载）
 
 ### 1.2 设计原则
 
@@ -23,81 +24,523 @@
 | 标准格式 | 采用 SKILL.md 标准格式（YAML frontmatter + Markdown body） |
 | 文件树浏览 | 支持多文件结构（SKILL.md + references + scripts） |
 | Markdown 渲染 | 语法高亮 + 代码复制 + 表格支持 |
+| 领域分类 | 资源领域、资产领域、运维领域、基础服务四类 |
+| 主题一致性 | 使用 SmartLink 专业蓝主题配色 |
 
 ### 1.3 当前状态
 
 | 功能 | 状态 | 差距 |
 |------|------|------|
-| SkillsManagement.vue | ✅ UI 完成 | 缺少 Markdown 文件浏览 |
-| SkillDetailPage.vue | ✅ UI 完成 | 缺少 SKILL.md 渲染、文件树 |
+| SkillsManagement.vue | ✅ UI 完成 | 缺少领域筛选、表格布局 |
+| SkillDetailPage.vue | ✅ UI 完成 | 缺少版本时间线、文件树 |
 | Store skills.ts | ⚠️ Mock 数据 | 缺少后端 API 对接 |
 | SkillFormDialog.vue | ⚠️ 功能不完整 | 缺少 Markdown 编辑器 |
-| 后端 Skill API | ⚠️ 基础 CRUD | 缺少文件存储 API |
+| 后端 Skill API | ⚠️ 基础 CRUD | 缺少文件存储、打包下载 API |
 
 ---
 
-## 2. Skills 列表页设计
+## 2. 领域属性设计
 
-### 2.1 页面结构
+### 2.1 领域分类
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Skills 管理                        [+ 新建] [导入]     │
-├─────────────────────────────────────────────────────────┤
-│  统计卡片:                                               │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐       │
-│  │ 总数    │ │ 已启用  │ │ 内置    │ │ 自定义  │       │
-│  │ {total} │ │ {enabled}│ │ {builtin}│ │ {custom}│       │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘       │
-├─────────────────────────────────────────────────────────┤
-│  筛选: [全部▾] [内置▾] [自定义▾]    搜索: [__________] │
-├─────────────────────────────────────────────────────────┤
-│  Skills Grid (卡片布局):                                │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │ {icon} {displayName}                      v{version}│ │
-│  │ ─────────────────────────────────────────────── │ │
-│  │ {description (截断80字符)}                       │ │
-│  │                                                   │ │
-│  │ [标签1] [标签2] [标签3]                          │ │
-│  │                                                   │ │
-│  │ 状态: ● {status} | 调用: {calls} | 成功率: {rate}%│ │
-│  │                                                   │ │
-│  │ [测试] [编辑] [查看详情 →]                       │ │
-│  └───────────────────────────────────────────────────┘ │
-│                                                         │
-│  分页: ◀ 1 2 3 ... {pages} ▶                            │
-└─────────────────────────────────────────────────────────┘
+Skill 新增 `domain` 属性，用于业务领域分类：
+
+```python
+class SkillDomain(enum.Enum):
+    RESOURCE = "resource"         # 资源领域：数据分析、数据处理
+    ASSET = "asset"               # 资产领域：资产管理、追踪监控
+    OPERATION = "operation"       # 运维领域：系统监控、运维管理
+    INFRASTRUCTURE = "infrastructure"  # 基础服务：API接口、基础工具
 ```
 
-### 2.2 卡片字段映射
+### 2.2 领域标签样式（SmartLink 主题）
 
-| UI 字段 | 数据来源 | 格式化规则 |
-|---------|----------|-----------|
-| 图标 | `icon` 或分类默认图标 | Emoji 或 URL |
-| 名称 | `displayName` | 标题样式 |
-| 版本 | `version` | 小标签 `v{version}` |
-| 描述 | `description` | 截断 80 字符 + "..." |
-| 标签 | `tags` (最多 3 个) | 小标签样式 |
-| 状态 | `status` | 状态点 + 文字 |
-| 调用次数 | `stats.totalCalls` | K/M 格式化 |
-| 成功率 | `stats.successRate` | 百分比 |
+| 领域 | 图标 | 背景色 | 文字色 |
+|------|------|--------|--------|
+| 📦 资源领域 | resource | `rgba(59, 130, 246, 0.08)` | `#3b82f6` (主色) |
+| 💎 资产领域 | asset | `rgba(217, 119, 6, 0.08)` | `#d97706` (警告色) |
+| 🛠️ 运维领域 | operation | `rgba(5, 150, 105, 0.08)` | `#059669` (成功色) |
+| ⚡ 基础服务 | infrastructure | `rgba(139, 92, 246, 0.08)` | `#8b5cf6` (紫色) |
 
-### 2.3 筛选与搜索
+### 2.3 前端类型定义
 
 ```typescript
-interface SkillFilters {
-  category: 'all' | 'builtin' | 'custom' | 'online'
-  status: 'all' | 'enabled' | 'disabled'
-  riskLevel: 'all' | 'low' | 'medium' | 'high'
-  search: string              // 搜索词
-  tags: string[]              // 标签多选
-  sortBy: 'name' | 'calls' | 'updatedAt'
+export type SkillDomain = 'resource' | 'asset' | 'operation' | 'infrastructure'
+
+const DOMAIN_CONFIG: Record<SkillDomain, { icon: string; color: string; bgColor: string }> = {
+  resource: { icon: '📦', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.08)' },
+  asset: { icon: '💎', color: '#d97706', bgColor: 'rgba(217, 119, 6, 0.08)' },
+  operation: { icon: '🛠️', color: '#059669', bgColor: 'rgba(5, 150, 105, 0.08)' },
+  infrastructure: { icon: '⚡', color: '#8b5cf6', bgColor: 'rgba(139, 92, 246, 0.08)' }
 }
 ```
 
-### 2.4 交互
+---
 
-| 操作 | 行为 |
+## 3. Skills 列表页设计（表格布局）
+
+### 3.1 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  顶部导航: SmartLink | AI 智能平台                                │
+│  [MCP Server] [Agent] [Skill 管理✓] [Prompt]           👤 admin  │
+├──────────────────────────────────────────────────────────────────┤
+│  左侧菜单 (220px):                                                │
+│  ┌─────────────┐                                                 │
+│  │ AI 注册中心 │                                                 │
+│  │ 📦 MCP Server│                                                │
+│  │ 🤖 Agent     │                                                │
+│  │ ⚡ Skill 管理 ✓│                                               │
+│  │ 📝 Prompt    │                                                 │
+│  ├─────────────┤                                                 │
+│  │ 平台管理    │                                                 │
+│  │ 📁 命名空间 │                                                 │
+│  │ 👥 权限控制 │                                                 │
+│  └─────────────┘                                                 │
+├──────────────────────────────────────────────────────────────────┤
+│  主内容区:                                                        │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │ Skill 管理                    [搜索框] [上传ZIP] [+创建]    │ │
+│  ├─────────────────────────────────────────────────────────────┤ │
+│  │ 统计卡片:  📦 15 总数  ✅ 12 已上线  📝 3 草稿             │ │
+│  ├─────────────────────────────────────────────────────────────┤ │
+│  │ 表格:                                                        │ │
+│  │ | 名称       | 领域       | 描述     | 版本数 | 下载量 | 状态 | │
+│  │ |------------|------------|----------|--------|--------|------| │
+│  │ | data-analyzer | 📦资源领域 | 智能分析... | 3 | 1,542 | ONLINE | │
+│  │ | asset-tracker | 💎资产领域 | 资产追踪... | 2 | 823 | ONLINE | │
+│  │ | ops-monitor | 🛠️运维领域 | 运维监控... | 4 | 2,156 | ONLINE | │
+│  │ | base-service | ⚡基础服务 | 基础API... | 1 | 4,562 | ONLINE | │
+│  │ | report-gen | 📦资源领域 | 报告生成... | 0 | 0 | DRAFT | │
+│  └─────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 表格字段
+
+| 列名 | 数据来源 | 说明 |
+|------|----------|------|
+| 名称 | `name` | Skill 标识符 |
+| 领域 | `domain` | 领域标签（带颜色） |
+| 描述 | `description` | 截断 50 字符 |
+| 版本数 | `version_count` | 在线版本数量 |
+| 下载量 | `stats.downloads` | 累计下载次数 |
+| 状态 | `status` | ONLINE/DRAFT/OFFLINE 标签 |
+| 更新时间 | `updated_at` | 格式化日期 |
+| 操作 | - | 详情按钮 |
+
+---
+
+## 4. Skill 详情页设计
+
+### 4.1 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  详情头部:                                                        │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │ data-analyzer  [📦 资源领域] [ONLINE✓]                      │ │
+│  │ 智能数据分析技能，支持多维度数据统计、可视化和洞察生成...      │ │
+│  │ 👤 作者: SmartLink Team  📋 MIT  📅 2026-03-01  🔄 2026-04-18 │ │
+│  │                                [📤 导出ZIP] [📋 复制] [✏️ 编辑]│ │
+│  └─────────────────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────────────────┤
+│  详情主体 (左侧内容 + 右侧信息卡片):                               │
+│  ┌───────────────────────────────────┬─────────────────────────┐ │
+│  │ 内容编辑区 (flex: 1)              │ 信息侧边栏 (300px)      │ │
+│  │ ┌───────────────────────────────┐ │ ┌─────────────────────┐ │ │
+│  │ │ Tab: [SKILL.md✓] [文件树] [Schema] [配置] [统计] │ │ │ │ 基本信息         │ │ │
+│  │ ├───────────────────────────────┤ │ │ 领域: 📦 资源领域   │ │ │
+│  │ │ Markdown 内容:                │ │ │ 风险: 🟢 低风险     │ │ │
+│  │ │ # data-analyzer               │ │ │ 可见性: PUBLIC      │ │ │
+│  │ │                               │ │ │ 下载量: 1,542       │ │ │
+│  │ │ ## Overview                   │ │ │ 在线版本: 3         │ │ │
+│  │ │ 智能数据分析技能...            │ │ └─────────────────────┘ │ │
+│  │ │                               │ │ ┌─────────────────────┐ │ │
+│  │ │ ## Input Schema               │ │ │ 版本时间线          │ │ │
+│  │ │ | Property | Type | Required | │ │ ┌─────────────────┐ │ │ │
+│  │ │                               │ │ │ │ v2.1.0 ONLINE✓  │ │ │ │
+│  │ │ ## Examples                   │ │ │ │ 2026-04-18      │ │ │ │
+│  │ │ ```json                       │ │ │ └─────────────────┘ │ │ │
+│  │ │ { ... }                       │ │ │ ┌─────────────────┐ │ │ │
+│  │ │ ```                           │ │ │ │ v2.0.0 OFFLINE │ │ │ │
+│  │ └───────────────────────────────┘ │ │ └─────────────────┘ │ │
+│  │                                   │ └─────────────────────┘ │ │
+│  │                                   │ ┌─────────────────────┐ │ │
+│  │                                   │ │ CLI 安装命令        │ │ │
+│  │                                   │ │ nacos-cli skill-get │ │ │
+│  │                                   │ │ [📋 复制]           │ │ │
+│  │                                   │ └─────────────────────┘ │ │
+│  │                                   │ ┌─────────────────────┐ │ │
+│  │                                   │ │ 打包下载            │ │ │
+│  │                                   │ │ [📦 导出为 ZIP]     │ │ │
+│  │                                   │ └─────────────────────┘ │ │
+│  └───────────────────────────────────┴─────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 功能要点
+
+| 功能 | 说明 |
+|------|------|
+| 版本时间线 | 右侧卡片展示所有版本，点击切换预览 |
+| CLI 命令卡片 | 提供安装命令，一键复制 |
+| 打包下载 | 导出 Skill 所有文件为 ZIP |
+| Tab 切换 | SKILL.md / 文件树 / Schema / 配置 / 统计 |
+
+---
+
+## 5. 打包下载 API 设计
+
+### 5.1 API 端点
+
+```
+GET /api/v1/skills/{id}/export
+```
+
+### 5.2 响应
+
+```python
+# 返回 ZIP 文件流
+@router.get("/skills/{skill_id}/export")
+async def export_skill(skill_id: str):
+    """
+    打包下载 Skill 所有文件
+    
+    返回包含:
+    - SKILL.md
+    - README.md
+    - references/*.md
+    - examples/*.json
+    - scripts/*.py
+    """
+    skill = await skill_service.get_skill(skill_id)
+    files = await skill_service.get_skill_files(skill_id)
+    
+    # 生成 ZIP
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for file in files:
+            zf.writestr(file.path, file.content)
+    
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename={skill.name}.zip"
+        }
+    )
+```
+
+### 5.3 ZIP 文件结构
+
+```
+skill-name.zip
+├── SKILL.md              # 主文件
+├── README.md             # 说明文档
+├── references/           # 参考文档
+│   ├── api-guide.md
+│   └── best-practices.md
+├── examples/             # 示例用例
+│   └── demo.json
+└── scripts/              # 可执行脚本
+    └── helper.py
+```
+
+---
+
+## 6. SmartLink 专业蓝主题配色
+
+### 6.1 主题变量（来自 `variables.scss`）
+
+| 类别 | CSS 变量 | 颜色值 | 用途 |
+|------|----------|--------|------|
+| 主色 | `--primary-color` | `#3b82f6` | 按钮、链接、选中态 |
+| 主色浅 | `--primary-light` | `#60a5fa` | 悬浮状态 |
+| 主色深 | `--primary-dark` | `#2563eb` | 按下状态 |
+| 辅助色 | `--secondary-color` | `#059669` | 成功状态、辅助操作 |
+| 强调色 | `--accent-color` | `#22c55e` | CTA 按钮 |
+| 背景主色 | `--bg-primary` | `#ffffff` | 卡片、表格背景 |
+| 背景次色 | `--bg-secondary` | `#f8fafc` | 页面背景 |
+| 背景三级 | `--bg-tertiary` | `#f1f5f9` | 次要背景 |
+| 边框色 | `--border-color-base` | `#e2e8f0` | 分割线、边框 |
+| 文字主色 | `--text-primary` | `#0f172a` | 标题、重要文字 |
+| 文字次色 | `--text-secondary` | `#475569` | 正文、描述 |
+| 文字三级 | `--text-tertiary` | `#94a3b8` | 次要、提示文字 |
+| 成功色 | `--success` | `#059669` | ONLINE 状态 |
+| 警告色 | `--warning` | `#d97706` | DRAFT 状态 |
+| 错误色 | `--error` | `#dc2626` | OFFLINE/Error |
+
+### 6.2 渐变和阴影
+
+```scss
+// 渐变
+--gradient-primary: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+
+// 阴影
+--shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+--shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04);
+--shadow-card-hover: 0 8px 24px rgba(15, 23, 42, 0.08);
+--shadow-primary: 0 4px 14px rgba(59, 130, 246, 0.2);
+```
+
+### 6.3 圆角系统
+
+```scss
+$border-radius-sm: 4px;
+$border-radius-md: 8px;
+$border-radius-lg: 12px;
+```
+
+---
+
+## 7. 数据模型更新
+
+### 7.1 Skill 模型（更新）
+
+```python
+class Skill(Base):
+    __tablename__ = "skills"
+    
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # 分类
+    category: Mapped[SkillCategory] = mapped_column(default=SkillCategory.CUSTOM)
+    domain: Mapped[SkillDomain] = mapped_column(default=SkillDomain.RESOURCE)  # 新增
+    status: Mapped[SkillStatus] = mapped_column(default=SkillStatus.ENABLED)
+    
+    # 版本与作者
+    version: Mapped[str] = mapped_column(String(32), default="1.0.0")
+    author: Mapped[str] = mapped_column(String(128))
+    maintainer: Mapped[Optional[str]] = mapped_column(String(128))
+    license: Mapped[Optional[str]] = mapped_column(String(64))
+    
+    # 元数据
+    tags: Mapped[List[str]] = mapped_column(JSON, default=list)
+    icon: Mapped[Optional[str]] = mapped_column(String(256))
+    
+    # 风险控制
+    risk_level: Mapped[SkillRiskLevel] = mapped_column(default=SkillRiskLevel.LOW)
+    requires_approval: Mapped[bool] = mapped_column(default=False)
+    
+    # 可见性
+    visibility: Mapped[SkillVisibility] = mapped_column(default=SkillVisibility.PUBLIC)  # 新增
+    
+    # Schema
+    input_schema: Mapped[Dict] = mapped_column(JSON, default=dict)
+    output_schema: Mapped[Dict] = mapped_column(JSON, default=dict)
+    
+    # 配置
+    config: Mapped[Dict] = mapped_column(JSON, default=dict)
+    dependencies: Mapped[Dict] = mapped_column(JSON, default=dict)
+    stats: Mapped[Dict] = mapped_column(JSON, default=dict)
+    
+    # 来源
+    source_type: Mapped[Optional[str]] = mapped_column(String(32))
+    source_url: Mapped[Optional[str]] = mapped_column(String(512))
+    
+    # 租户
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"))
+    
+    # 时间
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column()
+    
+    # 关系
+    files: Mapped[List[SkillFile]] = relationship(back_populates="skill", cascade="all, delete")
+    versions: Mapped[List[SkillVersion]] = relationship(back_populates="skill", cascade="all, delete")  # 新增
+```
+
+### 7.2 SkillVersion 模型（新增）
+
+```python
+class SkillVersion(Base):
+    """Skill 版本表 - 支持版本时间线"""
+    __tablename__ = "skill_versions"
+    
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"))
+    
+    # 版本信息
+    version: Mapped[str] = mapped_column(String(32))  # e.g., "2.1.0"
+    status: Mapped[SkillVersionStatus] = mapped_column()  # DRAFT/REVIEWING/ONLINE/OFFLINE
+    
+    # 标签
+    labels: Mapped[List[str]] = mapped_column(JSON, default=list)  # latest/stable/canary
+    
+    # 时间
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    published_at: Mapped[Optional[datetime]] = mapped_column()
+    
+    # 关系
+    skill: Mapped[Skill] = relationship(back_populates="versions")
+```
+
+---
+
+## 8. 前端类型定义更新
+
+```typescript
+export type SkillDomain = 'resource' | 'asset' | 'operation' | 'infrastructure'
+export type SkillVisibility = 'public' | 'private'
+export type SkillVersionStatus = 'draft' | 'reviewing' | 'online' | 'offline'
+
+export interface SkillListItem {
+  id: string
+  name: string
+  displayName: string
+  description: string
+  domain: SkillDomain          // 新增
+  category: SkillCategory
+  status: SkillStatus
+  versionCount: number         // 新增
+  downloads: number            // 新增
+  updatedAt: number
+}
+
+export interface SkillDetail extends SkillListItem {
+  visibility: SkillVisibility  // 新增
+  versions: SkillVersion[]     // 新增
+  files: SkillFileNode[]
+  stats: SkillStats
+  config: SkillConfig
+  dependencies: SkillDependencies
+}
+
+export interface SkillVersion {
+  id: string
+  version: string
+  status: SkillVersionStatus
+  labels: string[]
+  createdAt: number
+  publishedAt?: number
+}
+```
+
+---
+
+## 9. 实施计划更新
+
+### Phase 1: 后端 API (P0)
+
+| 任务 | 工作量 | 依赖 |
+|------|--------|------|
+| 更新 Skill/SkillVersion 数据模型 | 3h | 无 |
+| 实现 Skills 列表 API（含领域筛选） | 3h | 数据模型 |
+| 实现文件存储 API | 3h | 数据模型 |
+| 实现打包下载 API | 2h | 文件存储 |
+| 实现版本时间线 API | 2h | SkillVersion模型 |
+| 数据库迁移脚本 | 1h | 数据模型 |
+
+### Phase 2: 前端对接 (P0)
+
+| 任务 | 工作量 | 依赖 |
+|------|--------|------|
+| 更新 skills store（真实 API） | 2h | Phase 1 |
+| 创建 SkillFileTree 组件 | 3h | 无 |
+| 创建 MarkdownRenderer 组件 | 2h | 无 |
+| 创建 VersionTimeline 组件 | 2h | 无 |
+| 更新 SkillsManagement.vue（表格布局） | 3h | store |
+| 更新 SkillDetailPage.vue | 4h | 组件 |
+| 添加打包下载功能 | 1h | Phase 1 |
+
+### Phase 3: 增强 (P1)
+
+| 任务 | 工作量 | 依赖 |
+|------|--------|------|
+| 完善 SkillFormDialog | 3h | Phase 2 |
+| 实现高级搜索 | 4h | Phase 2 |
+| 实现导入/导出功能 | 3h | Phase 2 |
+
+### 总工作量
+
+- **Phase 1:** 14h
+- **Phase 2:** 14h  
+- **Phase 3:** 10h
+- **总计:** 38h (~5 人天)
+
+---
+
+## 10. 附录
+
+### 10.1 领域图标和颜色
+
+```typescript
+const DOMAIN_CONFIG: Record<SkillDomain, { icon: string; color: string; bgColor: string }> = {
+  resource: { 
+    icon: '📦', 
+    color: '#3b82f6', 
+    bgColor: 'rgba(59, 130, 246, 0.08)' 
+  },
+  asset: { 
+    icon: '💎', 
+    color: '#d97706', 
+    bgColor: 'rgba(217, 119, 6, 0.08)' 
+  },
+  operation: { 
+    icon: '🛠️', 
+    color: '#059669', 
+    bgColor: 'rgba(5, 150, 105, 0.08)' 
+  },
+  infrastructure: { 
+    icon: '⚡', 
+    color: '#8b5cf6', 
+    bgColor: 'rgba(139, 92, 246, 0.08)' 
+  }
+}
+```
+
+### 10.2 状态颜色映射（SmartLink 主题）
+
+```typescript
+const STATUS_COLORS: Record<SkillStatus, { color: string; bgColor: string }> = {
+  enabled: { 
+    color: '#059669',     // --success
+    bgColor: 'rgba(5, 150, 105, 0.08)'
+  },
+  disabled: { 
+    color: '#dc2626',     // --error
+    bgColor: 'rgba(220, 38, 38, 0.08)'
+  },
+  deprecated: { 
+    color: '#d97706',     // --warning
+    bgColor: 'rgba(217, 119, 6, 0.08)'
+  }
+}
+
+const VERSION_STATUS_COLORS: Record<SkillVersionStatus, { color: string; bgColor: string }> = {
+  draft: { color: '#d97706', bgColor: 'rgba(217, 119, 6, 0.08)' },
+  reviewing: { color: '#0284c7', bgColor: 'rgba(2, 132, 199, 0.08)' },
+  online: { color: '#059669', bgColor: 'rgba(5, 150, 105, 0.08)' },
+  offline: { color: '#94a3b8', bgColor: 'rgba(148, 163, 184, 0.08)' }
+}
+```
+
+### 10.3 文件 MIME 类型映射
+
+```typescript
+const MIME_TYPES: Record<string, string> = {
+  '.md': 'text/markdown',
+  '.py': 'text/x-python',
+  '.js': 'text/javascript',
+  '.ts': 'text/typescript',
+  '.json': 'application/json',
+  '.sh': 'text/x-shellscript',
+  '.yaml': 'text/yaml',
+  '.txt': 'text/plain'
+}
+```
+
+### 10.4 UX Mockup 文件
+
+完整 UX 设计 mockup 已保存至：
+- `.superpowers/ux-mockup/skills-ux-nacos-style.html`
 |------|------|
 | 点击卡片 | 跳转详情页 `/app/skill/{id}` |
 | 测试按钮 | 弹出 SkillTestDialog |
