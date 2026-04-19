@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Literal, Optional, Generic, TypeVar
 from pydantic import BaseModel, Field, ConfigDict
 
 # Import enums from models
-from models.application import AppStatus, AppType, ResourceStatus
+from models.application import AppStatus, AppType, ResourceStatus, SkillDomain, SkillVisibility
 
 
 # ============================================================
@@ -218,11 +218,16 @@ class MessageCreate(BaseModel):
 # ============================================================
 
 class SkillCreate(BaseModel):
-    """Create skill schema"""
+    """Create skill schema with domain support"""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = ""
     type: str = Field(default="custom", pattern="^(builtin|custom)$")
+    domain: str = Field(default="resource")  # Use string for simplicity
+    visibility: str = Field(default="public")
+    author: Optional[str] = None
+    tags: List[str] = Field(default=[])
     config: Dict[str, Any] = Field(default={})
+    skill_md_content: str = ""  # SKILL.md content
 
 
 class SkillUpdate(BaseModel):
@@ -268,6 +273,45 @@ class SkillTestResponse(BaseModel):
     success: bool
     result: Optional[Any] = None
     error: Optional[str] = None
+
+
+class SkillFileResponse(BaseModel):
+    """Skill file response"""
+    path: str
+    content: str
+    mime_type: str
+    size: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class SkillFileTreeNode(BaseModel):
+    """File tree node"""
+    name: str
+    type: str  # "file" | "directory"
+    path: Optional[str] = None
+    children: Optional[List["SkillFileTreeNode"]] = None
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+
+
+class SkillVersionResponse(BaseModel):
+    """Skill version response"""
+    id: str
+    version: str
+    status: str
+    labels: List[str] = []
+    created_at: datetime
+    published_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+SkillFileTreeNode.model_rebuild()
 
 
 class MCPServerCreate(BaseModel):

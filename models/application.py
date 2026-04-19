@@ -43,6 +43,20 @@ class ResourceStatus(str, enum.Enum):
     INACTIVE = "inactive"
 
 
+class SkillDomain(str, enum.Enum):
+    """Skill domain enum"""
+    RESOURCE = "resource"
+    CONVERSATION = "conversation"
+    APPLICATION = "application"
+
+
+class SkillVisibility(str, enum.Enum):
+    """Skill visibility enum"""
+    PUBLIC = "public"
+    PRIVATE = "private"
+    INTERNAL = "internal"
+
+
 class Application(Base):
     """
     Application model with multi-tenant support
