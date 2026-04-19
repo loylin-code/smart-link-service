@@ -4,8 +4,10 @@ Aligned with frontend service expectations
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+import io
 
 from db.session import get_db
 from schemas import (
@@ -14,7 +16,8 @@ from schemas import (
     MCPServerCreate, MCPServerUpdate,
     MCPServerTestResponse, MCPServerRefreshResponse
 )
-from models import Skill, MCPServer, Component, ResourceStatus
+from models import Skill, MCPServer, Component, ResourceStatus, SkillFile, SkillVersion
+from services.skill_file_service import SkillFileService
 
 
 router = APIRouter(tags=["Resources"])
@@ -43,6 +46,7 @@ def skill_to_response(skill: Skill) -> dict:
         "config": skill.config or {},
         "dependencies": {},
         "stats": {"totalCalls": 0, "successRate": 100, "avgDuration": 0, "last30Days": {"calls": 0, "tokens": {"input": 0, "output": 0}, "cost": 0}},
+        "domain": getattr(skill, 'domain', 'resource'),
         "created_at": skill.created_at,
         "updated_at": skill.updated_at
     }
@@ -99,6 +103,7 @@ async def list_skills(
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
     status: Optional[str] = None,
     keyword: Optional[str] = None,
+    domain: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """Get skills list with pagination"""
@@ -113,6 +118,10 @@ async def list_skills(
     if keyword:
         query = query.where(Skill.name.ilike(f"%{keyword}%"))
         count_query = count_query.where(Skill.name.ilike(f"%{keyword}%"))
+    
+    if domain:
+        query = query.where(Skill.domain == domain)
+        count_query = count_query.where(Skill.domain == domain)
     
     total_result = await db.execute(count_query)
     total = total_result.scalar()
@@ -185,6 +194,53 @@ async def test_skill(skill_id: str, params: dict = {}, db: AsyncSession = Depend
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
     return ApiResponse(data=SkillTestResponse(success=True, result={"message": f"Skill {skill.name} test successful"}, error=None))
+
+
+@router.get("/skills/{skill_id}/files", response_model=ApiResponse[dict])
+async def get_skill_files(skill_id: str, db: AsyncSession = Depends(get_db)):
+    """Get skill file tree"""
+    skill = await db.get(Skill, skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    
+    file_service = SkillFileService(db)
+    file_tree = await file_service.build_file_tree(skill_id)
+    return ApiResponse(data={"tree": file_tree})
+
+
+@router.get("/skills/{skill_id}/files/{path:path}", response_model=ApiResponse[dict])
+async def get_skill_file(skill_id: str, path: str, db: AsyncSession = Depends(get_db)):
+    """Get skill file content"""
+    file_service = SkillFileService(db)
+    file = await file_service.get_file(skill_id, path)
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    return ApiResponse(data={"path": file.path, "content": file.content, "mime_type": file.mime_type, "size": file.size_bytes})
+
+
+@router.get("/skills/{skill_id}/versions", response_model=ApiResponse[dict])
+async def get_skill_versions(skill_id: str, db: AsyncSession = Depends(get_db)):
+    """Get skill version timeline"""
+    result = await db.execute(select(SkillVersion).where(SkillVersion.skill_id == skill_id).order_by(SkillVersion.created_at.desc()))
+    versions = result.scalars().all()
+    return ApiResponse(data={"versions": [{"id": v.id, "version": v.version, "status": v.status, "labels": v.labels or [], "created_at": v.created_at} for v in versions]})
+
+
+@router.get("/skills/{skill_id}/export")
+async def export_skill(skill_id: str, db: AsyncSession = Depends(get_db)):
+    """Export skill files as ZIP"""
+    skill = await db.get(Skill, skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    
+    file_service = SkillFileService(db)
+    zip_content = await file_service.export_skill_zip(skill_id, skill.name)
+    
+    return StreamingResponse(
+        io.BytesIO(zip_content),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={skill.name}.zip"}
+    )
 
 
 # ============================================================

@@ -289,10 +289,15 @@ class Skill(Base):
     # Skill configuration
     config = Column(JSON, default=dict, nullable=False)
     parameters_schema = Column(JSON, default=dict, nullable=False)  # JSON Schema for parameters
+    domain = Column(String(100), nullable=True)  # Domain category for grouping skills
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    
+    # Relationships
+    files = relationship("SkillFile", back_populates="skill", cascade="all, delete-orphan")
+    versions = relationship("SkillVersion", back_populates="skill", cascade="all, delete-orphan")
     
     # Indexes
     __table_args__ = (
@@ -443,3 +448,64 @@ class AuditLog(Base):
     
     def __repr__(self):
         return f"<AuditLog(id={self.id}, action={self.action})>"
+
+
+class SkillFile(Base):
+    """
+    Skill file model for storing skill files (SKILL.md, README.md, etc.)
+    """
+    __tablename__ = "skill_files"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    skill_id = Column(String, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_id = Column(String, ForeignKey("skill_versions.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # File info
+    path = Column(String(500), nullable=False)  # Relative path within skill
+    content = Column(Text, nullable=False)
+    mime_type = Column(String(100), default="text/markdown", nullable=False)
+    size_bytes = Column(Integer, default=0, nullable=False)
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    
+    # Relationships
+    skill = relationship("Skill", back_populates="files")
+    
+    # Indexes
+    __table_args__ = (
+        Index('ix_skill_files_skill_path', 'skill_id', 'path', unique=True),
+    )
+    
+    def __repr__(self):
+        return f"<SkillFile(id={self.id}, path={self.path})>"
+
+
+class SkillVersion(Base):
+    """
+    Skill version model for version history and timeline
+    """
+    __tablename__ = "skill_versions"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    skill_id = Column(String, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Version info
+    version = Column(String(32), nullable=False)  # e.g., "2.1.0"
+    status = Column(SQLEnum(ResourceStatus), default=ResourceStatus.ACTIVE, nullable=False)
+    labels = Column(JSON, default=list, nullable=False)  # e.g., ["latest", "stable"]
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    skill = relationship("Skill", back_populates="versions")
+    
+    # Indexes
+    __table_args__ = (
+        Index('ix_skill_versions_skill_version', 'skill_id', 'version', unique=True),
+    )
+    
+    def __repr__(self):
+        return f"<SkillVersion(id={self.id}, version={self.version})>"

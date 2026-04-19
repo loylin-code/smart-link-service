@@ -12,6 +12,8 @@ from models.application import (
     Component,
     APIKey,
     AuditLog,
+    SkillFile,
+    SkillVersion,
     AppStatus,
     AppType,
     ResourceStatus
@@ -58,6 +60,8 @@ __all__ = [
     "Component",
     "APIKey",
     "AuditLog",
+    "SkillFile",
+    "SkillVersion",
     "AppStatus",
     "AppType",
     "ResourceStatus",
