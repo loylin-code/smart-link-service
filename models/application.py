@@ -1,18 +1,18 @@
 """
 SQLAlchemy models for SmartLink
 """
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from sqlalchemy import (
     Column, String, Text, JSON, DateTime, Integer, 
     Boolean, Enum as SQLEnum, ForeignKey, Index
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 import enum
 import uuid
 
 from db.session import Base
+from core.time_utils import now_utc8, UTC8
 
 
 def generate_uuid() -> str:
@@ -87,8 +87,8 @@ class Application(Base):
     tools = Column(JSON, default=list, nullable=False)  # List of tool configs
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(String, ForeignKey("users.id"), nullable=True)
     
@@ -134,9 +134,9 @@ class Conversation(Base):
     total_tokens = Column(Integer, default=0, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
-    last_activity = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
+    last_activity = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     
     # Relationships
     application = relationship("Application", back_populates="conversations")
@@ -180,7 +180,7 @@ class Message(Base):
     
     # Metadata
     extra_metadata = Column("metadata", JSON, default=dict, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
@@ -225,8 +225,8 @@ class Resource(Base):
     
     # Metadata
     extra_metadata = Column("metadata", JSON, default=dict, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     created_by = Column(String, ForeignKey("users.id"), nullable=True)
     
     # Relationships
@@ -258,7 +258,7 @@ class ResourceVersion(Base):
     checksum = Column(String(64), nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     created_by = Column(String, ForeignKey("users.id"), nullable=True)
     
     # Relationships
@@ -292,8 +292,8 @@ class Skill(Base):
     domain = Column(String(100), nullable=True)  # Domain category for grouping skills
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     files = relationship("SkillFile", back_populates="skill", cascade="all, delete-orphan")
@@ -335,8 +335,8 @@ class MCPServer(Base):
     last_error = Column(Text, nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Indexes
     __table_args__ = (
@@ -365,8 +365,8 @@ class Component(Base):
     meta = Column(JSON, default=dict, nullable=False)  # Props, events, slots
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Indexes
     __table_args__ = (
@@ -404,7 +404,7 @@ class APIKey(Base):
     last_ip = Column(String(45), nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
@@ -444,7 +444,7 @@ class AuditLog(Base):
     error_message = Column(Text, nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False, index=True)
     
     def __repr__(self):
         return f"<AuditLog(id={self.id}, action={self.action})>"
@@ -467,8 +467,8 @@ class SkillFile(Base):
     size_bytes = Column(Integer, default=0, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     skill = relationship("Skill", back_populates="files")
@@ -497,7 +497,7 @@ class SkillVersion(Base):
     labels = Column(JSON, default=list, nullable=False)  # e.g., ["latest", "stable"]
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     
     # Relationships
     skill = relationship("Skill", back_populates="versions")

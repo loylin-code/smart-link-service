@@ -9,11 +9,11 @@ from sqlalchemy import (
     Boolean, Enum as SQLEnum, ForeignKey, Index
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 import enum
 import uuid
 
 from db.session import Base
+from core.time_utils import now_utc8
 
 
 def generate_uuid() -> str:
@@ -77,8 +77,8 @@ class Workflow(Base):
     retry_delay_seconds = Column(Integer, default=5, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     created_by = Column(String, ForeignKey("users.id"), nullable=True)
     
     # Relationships
@@ -123,8 +123,8 @@ class WorkflowNode(Base):
     retry_count = Column(Integer, default=0, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     workflow = relationship("Workflow", back_populates="nodes")
@@ -168,7 +168,7 @@ class WorkflowEdge(Base):
     order = Column(Integer, default=0, nullable=False)  # Order for multiple edges from same node
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     
     # Relationships
     workflow = relationship("Workflow", back_populates="edges")
@@ -233,8 +233,8 @@ class WorkflowExecution(Base):
     total_tokens = Column(Integer, default=0, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     workflow = relationship("Workflow", back_populates="executions")
@@ -283,7 +283,7 @@ class NodeExecution(Base):
     completion_tokens = Column(Integer, nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     
     # Relationships
     workflow_execution = relationship("WorkflowExecution", back_populates="node_executions")

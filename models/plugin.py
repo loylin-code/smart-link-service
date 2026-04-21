@@ -7,10 +7,10 @@ from sqlalchemy import (
     Boolean, Enum as SQLEnum, ForeignKey, Index
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 
 from db.session import Base
 from models.application import generate_uuid
+from core.time_utils import now_utc8
 
 
 class PluginStatus(str, enum.Enum):
@@ -48,8 +48,8 @@ class Plugin(Base):
     install_count = Column(Integer, default=0)
     
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     installations = relationship("PluginInstallation", back_populates="plugin")
@@ -76,7 +76,7 @@ class PluginInstallation(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     
     # Timestamps
-    installed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    installed_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
     
     # Relationships
     plugin = relationship("Plugin", back_populates="installations")

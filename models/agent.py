@@ -9,11 +9,11 @@ from sqlalchemy import (
     Boolean, Enum as SQLEnum, ForeignKey, Index
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 import enum
 import uuid
 
 from db.session import Base
+from core.time_utils import now_utc8
 
 
 def generate_uuid() -> str:
@@ -84,8 +84,8 @@ class Agent(Base):
     # === 元数据 ===
     creator = Column(String, ForeignKey("users.id"), nullable=True)
     category = Column(String(100), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     tenant = relationship("Tenant", back_populates="agents")
@@ -173,8 +173,8 @@ class AgentRuntimeStatus(Base):
     last_error_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     agent = relationship("Agent")

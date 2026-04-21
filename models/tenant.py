@@ -9,11 +9,11 @@ from sqlalchemy import (
     Boolean, Enum as SQLEnum, ForeignKey, Index, Numeric
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 import enum
 import uuid
 
 from db.session import Base
+from core.time_utils import now_utc8
 
 
 def generate_uuid() -> str:
@@ -76,8 +76,8 @@ class Tenant(Base):
     settings = Column(JSON, default=dict, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
@@ -160,8 +160,8 @@ class User(Base):
     preferences = Column(JSON, default=dict, nullable=False)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     # Relationships
     tenant = relationship("Tenant", back_populates="users")
@@ -257,8 +257,8 @@ class TenantSettings(Base):
     webhook_secret = Column(String(255), nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc8, nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=now_utc8, nullable=True)
     
     def __repr__(self):
         return f"<TenantSettings(tenant_id={self.tenant_id})>"
