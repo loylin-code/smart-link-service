@@ -39,6 +39,7 @@ api_router.include_router(
 
 api_router.include_router(
     websocket.router,
+    prefix="/ws",
     tags=["WebSocket"]
 )
 

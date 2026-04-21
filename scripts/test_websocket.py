@@ -19,7 +19,7 @@ import websockets
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8000
 HEALTH_ENDPOINT = f"http://{SERVER_HOST}:{SERVER_PORT}/health"
-WS_URL = f"ws://{SERVER_HOST}:{SERVER_PORT}/smart-link-service/api/v1/chat/test-client"
+WS_URL = f"ws://{SERVER_HOST}:{SERVER_PORT}/smart-link-service/api/v1/ws/chat/test-client"
 API_KEY = "sk-NLiqPXnqoPktCYWXZ2W-kBsdlag0Rs7Gzb3TCv5XGZA"
 STARTUP_TIMEOUT = 30  # seconds
 HEALTH_CHECK_INTERVAL = 2  # seconds

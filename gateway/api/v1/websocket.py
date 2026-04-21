@@ -25,7 +25,7 @@ async def websocket_chat(
     """
     WebSocket chat endpoint
     
-    Connect with: ws://host/api/v1/ws/chat/{client_id}?app_id={app_id}&api_key={api_key}
+    Connect with: ws://host/smart-link-service/api/v1/ws/chat/{client_id}?app_id={app_id}&api_key={api_key}
     
     Message format:
     {

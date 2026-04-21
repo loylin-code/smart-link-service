@@ -243,9 +243,9 @@ async def main():
         # WebSocket test instructions
         print("\n=== WebSocket Test Instructions ===")
         print("Use the following URL to connect:")
-        print(f"  ws://localhost:8000/ws/chat/test-client?api_key={result['api_key']}")
+        print(f"  ws://localhost:8000/smart-link-service/api/v1/ws/chat/test-client?api_key={result['api_key']}")
         print("\nOr with JWT token:")
-        print(f"  ws://localhost:8000/ws/chat/test-client?token={result['jwt_token']}")
+        print(f"  ws://localhost:8000/smart-link-service/api/v1/ws/chat/test-client?token={result['jwt_token']}")
         print("\nSend test message:")
         print('''  {"type": "chat", "data": {"message": "你好"}}''')
         
