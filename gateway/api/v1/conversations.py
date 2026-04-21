@@ -10,8 +10,9 @@ from typing import Optional
 from datetime import datetime
 import uuid
 
+from core.time_utils import now_utc8
 from db.session import get_db
-from schemas import ApiResponse, PaginatedData, ConversationCreate, ConversationUpdate
+from schemas import ApiResponse, PaginatedData, ConversationCreate, ConversationUpdate, MessageCreate
 from models import Conversation, Message, Application, Tenant, TenantStatus
 
 
@@ -24,13 +25,16 @@ router = APIRouter(tags=["Conversations"])
 
 def conversation_to_response(conv: Conversation, include_messages: bool = False) -> dict:
     """Convert Conversation model to frontend-expected response format"""
+    # 使用预加载的消息数量，避免懒加载触发 async 错误
+    message_count = getattr(conv, '_message_count', 0)
+    
     response = {
         "id": conv.id,
         "title": conv.title or "新对话",
         "app_id": conv.app_id,
         "user_id": conv.user_id,
         "status": "archived" if conv.is_archived else "active",
-        "message_count": 0,  # Will be calculated if needed
+        "message_count": message_count,
         "last_message_at": int(conv.updated_at.timestamp() * 1000) if conv.updated_at else None,
         "created_at": conv.created_at,
         "updated_at": conv.updated_at,
@@ -115,6 +119,21 @@ async def list_conversations(
     query = query.order_by(Conversation.updated_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     conversations = result.scalars().all()
+    
+    # Batch query message counts for all conversations
+    if conversations:
+        conv_ids = [c.id for c in conversations]
+        msg_count_query = (
+            select(Message.conversation_id, func.count(Message.id))
+            .where(Message.conversation_id.in_(conv_ids))
+            .group_by(Message.conversation_id)
+        )
+        msg_count_result = await db.execute(msg_count_query)
+        msg_counts = {row[0]: row[1] for row in msg_count_result.all()}
+        
+        # Assign message counts to conversations
+        for conv in conversations:
+            conv._message_count = msg_counts.get(conv.id, 0)
     
     return ApiResponse(
         data=PaginatedData(
@@ -265,8 +284,7 @@ async def get_conversation_messages(
 @router.post("/{conversation_id}/messages", response_model=ApiResponse[dict])
 async def add_message(
     conversation_id: str,
-    role: str,
-    content: dict,
+    data: MessageCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """添加消息到对话"""
@@ -287,8 +305,8 @@ async def add_message(
         tenant_id=conversation.tenant_id,
         conversation_id=conversation_id,
         user_id=conversation.user_id,
-        role=role,
-        content=content,
+        role=data.role,
+        content=data.content,
         sequence_number=sequence_number
     )
     
