@@ -1,38 +1,52 @@
-# Web Framework
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.6
+# ============================================================
+# SmartLink Backend Service - Production Dependencies
+# ============================================================
+# Generated from pyproject.toml
+# Install: pip install -r requirements.txt
+# Dev install: pip install -r requirements.txt -r requirements-dev.txt
+# ============================================================
 
-# Database
-sqlalchemy>=2.0.25
-asyncpg>=0.29.0
-aiosqlite>=0.19.0
-alembic>=1.13.1
+# Core Framework
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.32.0,<1.0.0
+python-multipart>=0.0.9
+pydantic>=2.11.0,<3.0.0
+pydantic-settings>=2.9.0,<3.0.0
+
+# Database (Async SQLAlchemy)
+sqlalchemy>=2.0.36,<3.0.0
+asyncpg>=0.30.0,<1.0.0           # PostgreSQL async driver
+aiosqlite>=0.20.0                # SQLite async driver (development)
+alembic>=1.14.0,<2.0.0           # Database migrations
 
 # Redis
-redis[asyncio]>=5.0.1
+redis[asyncio]>=6.0.0,<7.0.0     # Async Redis with connection pool
 
 # LLM Integration
-litellm>=1.20.0
-openai>=1.12.0
-anthropic>=0.18.0
+litellm>=1.83.0,<2.0.0           # Multi-provider LLM gateway
+openai>=1.50.0,<2.0.0            # OpenAI SDK (used by LiteLLM)
+anthropic>=0.45.0,<1.0.0         # Anthropic SDK (used by LiteLLM)
 
-# MCP
-mcp>=0.9.0
+# MCP (Model Context Protocol)
+mcp>=1.27.0,<2.0.0               # MCP SDK for tool calling
 
-# LangChain (基础能力)
-langchain>=0.1.0
-langchain-community>=0.0.20
-
-# Validation & Serialization
-pydantic>=2.5.3
-pydantic-settings>=2.1.0
+# AgentScope (Agent Framework)
+agentscope>=1.0.18,<2.0.0        # Multi-agent framework
 
 # Security
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.4.0   # JWT tokens
+passlib[bcrypt]>=1.7.4             # Password hashing
+cryptography>=42.0.0               # Cryptographic primitives
 
 # Utilities
-python-dotenv>=1.0.0
-httpx>=0.26.0
-aiofiles>=23.2.1
+python-dotenv>=1.0.1               # Environment variables
+httpx>=0.27.2                       # Async HTTP client
+aiofiles>=24.1.0                    # Async file I/O
+pyyaml>=6.0.2                       # YAML parsing (MCP config)
+jsonschema>=4.23.0                  # JSON schema validation (skills)
+
+# Monitoring
+prometheus-client>=0.21.1           # Prometheus metrics
+
+# Production Server
+gunicorn>=23.0.0                    # Production WSGI server
