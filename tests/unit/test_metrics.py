@@ -44,7 +44,7 @@ class TestMetricsMiddleware:
         # Mock request
         request = MagicMock(spec=Request)
         request.url = MagicMock()
-        request.url.path = '/api/v1/agents'
+        request.url.path = '/smart-link-service/api/v1/agents'
         request.method = 'GET'
         
         # Mock response

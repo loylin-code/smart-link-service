@@ -1,5 +1,5 @@
 """
-Agent API Routes - /api/v1/agents
+Agent API Routes - /smart-link-service/api/v1/agents
 Based on architecture design document and frontend services/agent.ts
 """
 from typing import Optional
@@ -134,7 +134,7 @@ async def get_agent(
     """
     Get agent by ID
     
-    Frontend: GET /api/v1/agents/{id}
+    Frontend: GET /smart-link-service/api/v1/agents/{id}
     """
     agent = await AgentService.get_agent_by_id(db, agent_id)
     if not agent:
@@ -175,7 +175,7 @@ async def delete_agent(
     """
     Delete agent
     
-    Frontend: DELETE /api/v1/agents/{id}
+    Frontend: DELETE /smart-link-service/api/v1/agents/{id}
     """
     # Only allow deletion of draft agents
     agent = await AgentService.get_agent_by_id(db, agent_id)

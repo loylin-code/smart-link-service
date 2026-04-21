@@ -83,14 +83,14 @@ class TestStructuredFormatter:
 
         # Add extra fields
         record.request_id = 'req_123'
-        record.path = '/api/v1/test'
+        record.path = '/smart-link-service/api/v1/test'
         record.method = 'GET'
 
         output = formatter.format(record)
         data = json.loads(output)
 
         assert data['request_id'] == 'req_123'
-        assert data['path'] == '/api/v1/test'
+        assert data['path'] == '/smart-link-service/api/v1/test'
         assert data['method'] == 'GET'
 
     def test_formatter_handles_exception(self):

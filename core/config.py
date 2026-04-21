@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # API
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    API_PREFIX: str = "/api/v1"
+    API_PREFIX: str = "/smart-link-service/api/v1"
     
     # Database
     DATABASE_TYPE: str = Field(

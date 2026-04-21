@@ -1,10 +1,5 @@
 """
-Execution Management API Routes - /api/v1/executions
-
-Endpoints for execution lifecycle management:
-- Cancel execution
-- Get execution status
-- List execution history
+Execution Management API Routes - /smart-link-service/api/v1/executions
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query

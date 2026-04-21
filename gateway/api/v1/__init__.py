@@ -4,6 +4,7 @@ API v1 module initialization
 from fastapi import APIRouter
 from gateway.api.v1 import applications, resources, websocket, auth, conversations, agents, mcp_servers, agent_design, plugins, chat_completions, executions
 
+# All v1 routes - prefix is set in main.py via settings.API_PREFIX
 api_router = APIRouter()
 
 # Authentication routes (no prefix, mounted at /auth)

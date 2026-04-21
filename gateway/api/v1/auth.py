@@ -29,7 +29,7 @@ from auth.providers.registry import ProviderRegistry
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # OAuth2 scheme for Swagger UI
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/smart-link-service/api/v1/auth/login", auto_error=False)
 
 
 # ==================== Schemas ====================
@@ -690,7 +690,7 @@ async def oauth_login_legacy(
     
     params = {
         "client_id": config["client_id"],
-        "redirect_uri": f"{settings.API_BASE_URL}/api/v1/auth/oauth/{provider}/callback",
+        "redirect_uri": f"{settings.API_BASE_URL}/smart-link-service/api/v1/auth/oauth/{provider}/callback",
         "response_type": "code",
         "scope": config["scope"],
         "state": state,

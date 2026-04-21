@@ -116,7 +116,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         
         # Skip WebSocket paths
-        websocket_paths = ("/ws", "/api/v1/ws", "/api/v1/chat", "/api/v1/stream")
+        websocket_paths = ("/ws", "/smart-link-service/api/v1/ws", "/smart-link-service/api/v1/chat", "/smart-link-service/api/v1/stream")
         if request.url.path.startswith(websocket_paths):
             return await call_next(request)
         
