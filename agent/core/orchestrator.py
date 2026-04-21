@@ -279,7 +279,7 @@ class AgentOrchestrator:
             agent = await self.factory.create_agent(
                 model_name=model_name,
                 sys_prompt=sys_prompt,
-                tools=toolkit.get_tool_schemas() if toolkit.get_tool_schemas() else None
+                tools=toolkit.get_tool_schemas() if toolkit and toolkit.get_tool_schemas() else None
             )
             
             # Stream response
