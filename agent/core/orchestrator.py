@@ -299,6 +299,97 @@ class AgentOrchestrator:
         finally:
             self.is_executing = False
     
+    async def execute_stream_openai(
+        self,
+        agent_id: str,
+        execution_id: str,
+        input_data: Dict[str, Any],
+        include_usage: bool = False
+    ) -> AsyncIterator[Any]:
+        """Execute agent with OpenAI-compatible streaming response
+        
+        Args:
+            agent_id: Agent ID to execute
+            execution_id: Unique execution ID for this request
+            input_data: Input data containing message and parameters
+            include_usage: Whether to include usage statistics in final chunk
+            
+        Yields:
+            ChatCompletionChunk objects for SSE streaming
+        """
+        import time
+        import uuid
+        from schemas.openai_compat import (
+            ChatCompletionChunk,
+            ChatCompletionChunkChoice,
+            ChatCompletionChunkDelta,
+            UsageInfo
+        )
+        
+        chunk_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
+        model = f"agent:{agent_id}"
+        created = int(time.time())
+        token_count = 0
+        
+        try:
+            # Stream from internal execute_stream
+            async for chunk in self.execute_stream(agent_id, input_data):
+                chunk_type = chunk.get("type", "chunk")
+                content = chunk.get("content", "")
+                
+                if chunk_type == "chunk" and content:
+                    token_count += len(content.split())
+                    
+                    # Create OpenAI-compatible chunk
+                    yield ChatCompletionChunk(
+                        id=chunk_id,
+                        created=created,
+                        model=model,
+                        choices=[
+                            ChatCompletionChunkChoice(
+                                index=0,
+                                delta=ChatCompletionChunkDelta(
+                                    role="assistant",
+                                    content=content
+                                ),
+                                finish_reason=None
+                            )
+                        ]
+                    )
+                
+                elif chunk_type == "complete":
+                    # Final chunk with finish reason
+                    usage = None
+                    if include_usage:
+                        usage = UsageInfo(
+                            prompt_tokens=len(str(input_data.get("message", "")).split()),
+                            completion_tokens=token_count,
+                            total_tokens=len(str(input_data.get("message", "")).split()) + token_count
+                        )
+                    
+                    yield ChatCompletionChunk(
+                        id=chunk_id,
+                        created=created,
+                        model=model,
+                        choices=[
+                            ChatCompletionChunkChoice(
+                                index=0,
+                                delta=ChatCompletionChunkDelta(),
+                                finish_reason="stop"
+                            )
+                        ],
+                        usage=usage
+                    )
+                    
+                elif chunk_type == "error":
+                    # Error will be handled by caller
+                    raise AgentError(content)
+                    
+        except AgentError:
+            raise
+        except Exception as e:
+            raise AgentError(f"Execution failed: {str(e)}")
+    
     async def execute_pipeline(
         self,
         agents: List[str],
