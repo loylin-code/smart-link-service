@@ -25,8 +25,8 @@ dependencies = [
     "redis[asyncio]>=6.0.0,<7.0.0",    # Async Redis with connection pool
     
     # LLM Integration
-    "litellm>=1.83.0,<2.0.0",          # Multi-provider LLM gateway
-    "openai>=1.50.0,<2.0.0",           # OpenAI SDK (used by LiteLLM)
+    "litellm>=1.83.0,<2.0.0",          # Multi-provider LLM gateway (manages openai version)
+    # openai is managed by litellm - don't pin separately
     "anthropic>=0.45.0,<1.0.0",        # Anthropic SDK (used by LiteLLM)
     
     # MCP (Model Context Protocol)
