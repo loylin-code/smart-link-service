@@ -1,39 +1,32 @@
 # MCP Servers Configuration
 # Loaded on startup alongside database MCP servers
 #
-# SmartLink supports 3 MCP transport types:
+# SmartLink supports 2 MCP transport types:
 # - stdio: Local process communication
 # - sse: Server-Sent Events (HTTP)
-# - streamable_http: HTTP POST/GET
+#
+# Template servers are disabled by default. Uncomment and configure when needed.
 
-mcp_servers:
+mcp_servers: []
+  
   # Example 1: Local stdio MCP server (filesystem)
   # Requires: pip install mcp-server-filesystem
-  - name: "filesystem"
-    type: "stdio"
-    description: "Local filesystem access"
-    command: "python"
-    args: ["-m", "mcp_server_filesystem"]
-    config:
-      env:
-        ALLOWED_DIRS: "/tmp"
-    status: "active"
+  # - name: "filesystem"
+  #   type: "stdio"
+  #   description: "Local filesystem access"
+  #   command: "python"
+  #   args: ["-m", "mcp_server_filesystem"]
+  #   config:
+  #     env:
+  #       ALLOWED_DIRS: "/tmp"
+  #   status: "active"
   
-  # Example 2: SSE remote MCP server template
-  - name: "remote-mcp-template"
-    type: "sse"
-    description: "Template for SSE MCP servers"
-    endpoint: "http://localhost:8080/sse"
-    config:
-      headers: {}
-      timeout: 30
-    status: "inactive"
-  
-  # Example 3: StreamableHttp MCP server template
-  - name: "http-mcp-template"
-    type: "streamable_http"
-    description: "Template for HTTP MCP servers"
-    endpoint: "http://localhost:8080/mcp"
-    config:
-      headers: {}
-    status: "inactive"
+  # Example 2: SSE remote MCP server
+  # - name: "remote-mcp"
+  #   type: "sse"
+  #   description: "Remote SSE MCP server"
+  #   endpoint: "http://your-server:8080/sse"
+  #   config:
+  #     headers: {}
+  #     timeout: 30
+  #   status: "active"
