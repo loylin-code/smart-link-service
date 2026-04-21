@@ -5,7 +5,7 @@ Agent分发系统
 import asyncio
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 from dataclasses import dataclass, asdict, field
@@ -451,7 +451,7 @@ class AgentPoolManager:
         while True:
             await asyncio.sleep(self.health_check_interval)
             
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             timeout = self.health_check_interval * 3
             
             for agent_id, agent in list(self.agents.items()):

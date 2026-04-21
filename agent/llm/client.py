@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """
     LLM client supporting multiple providers via LiteLLM
-    Supports: OpenAI, Anthropic, Azure, local models, etc.
+    Supports: OpenAI, Anthropic, Azure, Bailian, local models, etc.
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -36,6 +36,10 @@ class LLMClient:
         
         # Retry configuration
         self.max_retries = settings.LLM_MAX_RETRIES
+        
+        # Provider-specific configuration
+        self.api_key = self.config.get("api_key")
+        self.api_base = self.config.get("api_base")
         
         # Configure LiteLLM
         self._configure_litellm()
@@ -55,6 +59,30 @@ class LLMClient:
         
         # Set default parameters
         litellm.set_verbose = settings.DEBUG
+    
+    def _get_provider_config(self) -> Dict[str, Any]:
+        """
+        Get provider-specific configuration for LiteLLM
+        
+        Returns:
+            Dict with api_key, api_base for the provider
+        """
+        extra_params = {}
+        
+        # Handle OpenAI or any OpenAI-compatible provider
+        if self.provider == "openai":
+            # Use OPENAI_API_KEY and OPENAI_BASE_URL from settings
+            if settings.OPENAI_API_KEY:
+                extra_params["api_key"] = settings.OPENAI_API_KEY
+            if settings.OPENAI_BASE_URL:
+                extra_params["api_base"] = settings.OPENAI_BASE_URL
+            # Allow override via config
+            if self.api_key:
+                extra_params["api_key"] = self.api_key
+            if self.api_base:
+                extra_params["api_base"] = self.api_base
+        
+        return extra_params
     
     def _get_model_string(self) -> str:
         """
@@ -130,6 +158,9 @@ class LLMClient:
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                 }
+                
+                # Add provider-specific config (api_key, api_base)
+                request_params.update(self._get_provider_config())
                 
                 # Add tools if provided
                 if tools:
@@ -252,6 +283,9 @@ class LLMClient:
                 "stream": True,
             }
             
+            # Add provider-specific config (api_key, api_base)
+            request_params.update(self._get_provider_config())
+            
             if tools:
                 request_params["tools"] = tools
             
@@ -312,6 +346,9 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "stream": True,
             }
+            
+            # Add provider-specific config (api_key, api_base)
+            request_params.update(self._get_provider_config())
             
             # Add tools if provided
             if tools:

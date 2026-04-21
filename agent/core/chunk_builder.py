@@ -3,7 +3,6 @@ ChunkBuilder - Convert LiteLLM chunks to OpenAI compatible format
 
 Builds streaming chunks for OpenAI Chat Completions API compatibility.
 """
-import time
 from typing import Any, Literal
 
 from schemas.openai_compat import (
@@ -11,6 +10,7 @@ from schemas.openai_compat import (
     ChatCompletionChunkChoice,
     ChatCompletionChunkDelta,
     UsageInfo,
+    get_utc8_timestamp,
 )
 
 FinishReason = Literal["stop", "tool_calls", "length", "content_filter"]
@@ -51,7 +51,7 @@ class ChunkBuilder:
         return ChatCompletionChunk(
             id=chatcmpl_id,
             object="chat.completion.chunk",
-            created=int(time.time()),
+            created=get_utc8_timestamp(),
             model=model,
             choices=[],
             usage=None,

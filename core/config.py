@@ -130,8 +130,16 @@ class Settings(BaseSettings):
     OAUTH_CLIENT_DEFAULT_EXPIRE_DAYS: int = 365
     
     # LLM
-    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = Field(
+        default=None,
+        description="API key for OpenAI or any OpenAI-compatible service (Bailian, DeepSeek, etc.)"
+    )
+    OPENAI_BASE_URL: Optional[str] = Field(
+        default=None,
+        description="Base URL for OpenAI API or compatible services. Example: https://coding.dashscope.aliyuncs.com/v1"
+    )
     ANTHROPIC_API_KEY: Optional[str] = None
+    
     DEFAULT_LLM_PROVIDER: str = "openai"
     DEFAULT_LLM_MODEL: str = "gpt-4o-mini"
     

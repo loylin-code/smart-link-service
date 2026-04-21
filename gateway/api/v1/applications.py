@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
+from core.time_utils import now_utc8
 from db.session import get_db
 from schemas import (
     ApiResponse, PaginatedData,
@@ -244,7 +245,7 @@ async def publish_application(
         raise HTTPException(status_code=404, detail="Application not found")
     
     application.status = AppStatus.PUBLISHED
-    application.published_at = datetime.utcnow()
+    application.published_at = now_utc8()
     
     await db.commit()
     await db.refresh(application)

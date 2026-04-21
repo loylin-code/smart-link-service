@@ -4,12 +4,16 @@ Lane并发模型实现
 """
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 from enum import Enum
 from dataclasses import dataclass, field
 
+from core.time_utils import now_utc8
 import redis.asyncio as redis
+
+# UTC+8 timezone
+UTC8 = timezone(timedelta(hours=8))
 
 
 class LaneStatus(str, Enum):
@@ -36,8 +40,8 @@ class Lane:
     status: LaneStatus = LaneStatus.IDLE
     current_task: Optional[str] = None  # 当前任务ID
     queue: List[LaneTask] = field(default_factory=list)  # 排队任务
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC8))
+    last_activity: datetime = field(default_factory=lambda: datetime.now(UTC8))
     
     def queue_length(self) -> int:
         """获取队列长度"""
@@ -97,7 +101,7 @@ class LaneManager:
             for lane_id, lane in self.lanes.items():
                 if lane.status == LaneStatus.IDLE:
                     lane.status = LaneStatus.BUSY
-                    lane.last_activity = datetime.utcnow()
+                    lane.last_activity = datetime.now(UTC8)
                     await self._persist_lane_status(lane)
                     return lane_id
             
@@ -130,14 +134,14 @@ class LaneManager:
                 lane.queue.sort(key=lambda t: t.priority)
                 next_task = lane.queue.pop(0)
                 lane.current_task = next_task.task_id
-                lane.last_activity = datetime.utcnow()
+                lane.last_activity = datetime.now(UTC8)
                 await self._persist_lane_status(lane)
                 return next_task
             else:
                 # 无排队任务，Lane变为IDLE
                 lane.status = LaneStatus.IDLE
                 lane.current_task = None
-                lane.last_activity = datetime.utcnow()
+                lane.last_activity = datetime.now(UTC8)
                 await self._persist_lane_status(lane)
                 return None
     
@@ -184,7 +188,7 @@ class LaneManager:
             if best_lane.status == LaneStatus.IDLE:
                 best_lane.status = LaneStatus.QUEUED
             
-            best_lane.last_activity = datetime.utcnow()
+            best_lane.last_activity = datetime.now(UTC8)
             await self._persist_lane_status(best_lane)
             
             return best_lane.id

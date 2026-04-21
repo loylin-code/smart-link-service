@@ -29,8 +29,13 @@ class ConnectionManager:
         self.redis: Optional[redis.Redis] = None
         self.pubsub: Optional[redis.client.PubSub] = None
         
-    async def init_redis(self):
-        """Initialize Redis connection"""
+    async def init_redis(self, warmup_connections: int = 0):
+        """
+        Initialize Redis connection with optional warmup.
+        
+        Args:
+            warmup_connections: Number of connections to pre-warm (default: 0)
+        """
         try:
             self.redis = redis.Redis.from_url(
                 settings.REDIS_URL,
@@ -41,10 +46,28 @@ class ConnectionManager:
             
             # Test connection
             await self.redis.ping()
-            print("[OK] Redis connected successfully")
+            
+            # Warm up connection pool (optional)
+            if warmup_connections > 0:
+                await self._warmup_pool(warmup_connections)
+            
+            print(f"[OK] Redis connected (pool: {warmup_connections} connections warmed)")
             
         except Exception as e:
             raise RedisError(f"Failed to connect to Redis: {str(e)}", operation="init")
+    
+    async def _warmup_pool(self, target: int):
+        """
+        Pre-warm Redis connection pool.
+        
+        Establishes target connections to reduce latency on first requests.
+        
+        Args:
+            target: Number of connections to pre-establish
+        """
+        import asyncio
+        print(f"[REDIS] Warming up {target} connections...")
+        await asyncio.gather(*[self.redis.ping() for _ in range(target)])
     
     async def connect(self, websocket: WebSocket, client_id: str, app_id: Optional[str] = None):
         """

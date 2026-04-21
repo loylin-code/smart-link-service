@@ -3,10 +3,11 @@ WebSocket心跳管理器
 实现双向心跳检测和连接活跃度监控
 """
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Callable, Any
 from fastapi import WebSocket
 
+from core.time_utils import now_utc8, UTC8
 import redis.asyncio as redis
 
 
@@ -99,7 +100,7 @@ class HeartbeatManager:
     async def record_ping(self, session_key: str):
         """记录客户端心跳"""
         if session_key in self.connections:
-            self.connections[session_key]["last_ping"] = datetime.utcnow()
+            self.connections[session_key]["last_ping"] = datetime.now(UTC8)
             self.connections[session_key]["missed_heartbeats"] = 0
             
             # 更新Redis
@@ -112,7 +113,7 @@ class HeartbeatManager:
     async def record_pong(self, session_key: str):
         """记录服务端心跳响应"""
         if session_key in self.connections:
-            self.connections[session_key]["last_pong"] = datetime.utcnow()
+            self.connections[session_key]["last_pong"] = datetime.now(UTC8)
     
     async def send_heartbeat(self, session_key: str):
         """发送心跳到客户端"""
@@ -134,7 +135,7 @@ class HeartbeatManager:
         while True:
             await asyncio.sleep(self.interval)
             
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             dead_connections = []
             
             for session_key, conn in self.connections.items():

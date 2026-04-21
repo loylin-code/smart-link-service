@@ -102,6 +102,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Returns:
             Response
         """
+        # Skip authentication for CORS preflight (OPTIONS) requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Skip authentication for public paths
         if request.url.path in self.PUBLIC_PATHS:
             return await call_next(request)
@@ -300,6 +304,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         Returns:
             Response
         """
+        # Skip authentication for CORS preflight (OPTIONS) requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Skip authentication for public paths
         if request.url.path in self.PUBLIC_PATHS:
             return await call_next(request)

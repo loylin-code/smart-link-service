@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from models.skill_file import SkillFile
+from models import SkillFile
 
 
 class SkillFileService:

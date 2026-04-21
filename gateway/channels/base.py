@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from fastapi import Request, Response, WebSocket
 
 from core.config import settings
+from core.time_utils import now_utc8
 
 
 class ChannelType(str, Enum):
@@ -132,7 +133,7 @@ class WebChannelAdapter(ChannelAdapter):
             session_key=raw_data.get("session_key"),
             message_type=raw_data.get("type", MessageType.TEXT),
             content=raw_data.get("content", ""),
-            timestamp=datetime.utcnow(),
+            timestamp=now_utc8(),
             metadata={
                 "client_info": raw_data.get("client_info", {}),
                 "app_id": raw_data.get("app_id")
@@ -348,7 +349,7 @@ class APIChannelAdapter(ChannelAdapter):
             conversation_id=raw_data.get("conversation_id", ""),
             message_type=raw_data.get("message_type", MessageType.TEXT),
             content=raw_data.get("content", ""),
-            timestamp=datetime.utcnow(),
+            timestamp=now_utc8(),
             metadata={
                 "request_id": raw_data.get("request_id"),
                 "api_version": raw_data.get("api_version", "v1")

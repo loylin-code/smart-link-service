@@ -8,10 +8,23 @@ Supports:
 - Multi-turn conversations via conversation_id
 """
 import json
-import time
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+def get_utc8_timestamp() -> int:
+    """
+    Get Unix timestamp in UTC+8 (China Standard Time)
+    
+    Returns:
+        Unix timestamp adjusted for UTC+8 timezone
+    """
+    # UTC+8 is 8 hours ahead of UTC
+    utc8 = timezone(timedelta(hours=8))
+    now_utc8 = datetime.now(utc8)
+    return int(now_utc8.timestamp())
 
 
 # ============================================================
@@ -157,7 +170,7 @@ class ChatCompletionChunk(BaseModel):
     """
     id: str = Field(..., description="Chunk ID")
     object: Literal["chat.completion.chunk"] = Field(default="chat.completion.chunk")
-    created: int = Field(default_factory=lambda: int(time.time()), description="Unix timestamp")
+    created: int = Field(default_factory=get_utc8_timestamp, description="Unix timestamp (UTC+8)")
     model: str = Field(..., description="Model ID")
     choices: List[ChatCompletionChunkChoice]
     usage: Optional[UsageInfo] = Field(default=None)
@@ -208,6 +221,8 @@ class StreamErrorResponse(BaseModel):
 # ============================================================
 
 __all__ = [
+    # Utility
+    "get_utc8_timestamp",
     # Request
     "ChatCompletionRequest",
     "ChatMessage",
