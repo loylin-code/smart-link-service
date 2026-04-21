@@ -2,7 +2,7 @@
 API v1 module initialization
 """
 from fastapi import APIRouter
-from gateway.api.v1 import applications, resources, websocket, auth, conversations, agents, mcp_servers, agent_design, plugins
+from gateway.api.v1 import applications, resources, websocket, auth, conversations, agents, mcp_servers, agent_design, plugins, chat_completions, executions
 
 api_router = APIRouter()
 
@@ -57,4 +57,15 @@ api_router.include_router(
     plugins.router,
     prefix="/plugins",
     tags=["Plugins"]
+)
+
+api_router.include_router(
+    chat_completions.router,
+    tags=["Chat Completions"]
+)
+
+api_router.include_router(
+    executions.router,
+    prefix="/executions",
+    tags=["Executions"]
 )
