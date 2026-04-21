@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     
     # Redis
     REDIS_URL: str = Field(
-        ...,
+        default="redis://localhost:6379/0",
         description="Redis connection URL"
     )
     # Redis Connection Pool
@@ -100,12 +100,12 @@ class Settings(BaseSettings):
     # Security
     API_KEY_HEADER: str = "X-API-Key"
     MASTER_API_KEY: str = Field(
-        ...,
-        description="Master API key for admin access"
+        default="sk-smartlink-master-key-dev-only",
+        description="Master API key for admin access. MUST change in production!"
     )
     SECRET_KEY: str = Field(
-        ...,
-        description="Secret key for JWT signing (min 32 chars)"
+        default="sk-smartlink-secret-key-dev-only-min-32-chars",
+        description="Secret key for JWT signing (min 32 chars). MUST change in production!"
     )
     
     # JWT Settings
