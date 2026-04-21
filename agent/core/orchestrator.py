@@ -245,7 +245,7 @@ class AgentOrchestrator:
         input_data: Dict[str, Any],
         conversation_id: Optional[str] = None
     ) -> AsyncIterator[Dict[str, Any]]:
-        """Execute agent with streaming response
+        """Execute agent with streaming response using LLMClient
         
         Args:
             agent_id: Agent ID to execute
@@ -260,39 +260,50 @@ class AgentOrchestrator:
             # Load agent configuration
             role_config = await self._load_agent_config(agent_id)
             
-            # Initialize context
-            self.context.init(role_config, input_data, conversation_id)
-            
-            # Create toolkit
-            toolkit = await self._create_toolkit(role_config)
-            
             # Build system prompt
             identity = role_config.get("identity", {})
-            sys_prompt = self.factory._build_sys_prompt(identity, {})
+            name = identity.get("name", "Assistant")
+            persona = identity.get("persona", "You are a helpful assistant.")
+            sys_prompt = f"# {name}\n\n{persona}"
             
             # Get LLM config
             capabilities = role_config.get("capabilities", {})
             llm_config = capabilities.get("llm", {})
-            model_name = llm_config.get("model", "gpt-4")
+            model = llm_config.get("model", "gpt-4o-mini")
+            temperature = llm_config.get("temperature", 0.7)
             
-            # Create agent
-            agent = await self.factory.create_agent(
-                model_name=model_name,
-                sys_prompt=sys_prompt,
-                tools=toolkit.get_tool_schemas() if toolkit and toolkit.get_tool_schemas() else None
-            )
+            # Create LLMClient directly for streaming
+            from agent.llm.client import LLMClient
+            llm_client = LLMClient({
+                "model": model,
+                "provider": "openai"  # LiteLLM handles multiple providers
+            })
+            
+            # Build messages
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": input_data.get("message", "")}
+            ]
             
             # Stream response
-            message = {"content": input_data.get("message", "")}
-            async for chunk in agent.stream_reply(message):
-                yield {
-                    "type": "chunk",
-                    "content": getattr(chunk, 'content', str(chunk)),
-                    "done": False
-                }
-            
-            # Send completion marker
-            yield {"type": "complete", "content": "", "done": True}
+            async for chunk in llm_client.chat_stream(messages, temperature=temperature):
+                content = chunk.get("content", "")
+                finish_reason = chunk.get("finish_reason")
+                
+                if content:
+                    yield {
+                        "type": "chunk",
+                        "content": content,
+                        "done": False
+                    }
+                
+                if finish_reason:
+                    yield {
+                        "type": "complete",
+                        "content": "",
+                        "done": True
+                    }
+                    break
             
         except Exception as e:
             yield {"type": "error", "content": str(e), "done": True}
