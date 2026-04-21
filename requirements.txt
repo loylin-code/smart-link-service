@@ -12,6 +12,7 @@ uvicorn[standard]>=0.32.0,<1.0.0
 python-multipart>=0.0.9
 pydantic>=2.11.0,<3.0.0
 pydantic-settings>=2.9.0,<3.0.0
+email-validator>=2.2.0          # Email validation for pydantic EmailStr
 
 # Database (Async SQLAlchemy)
 sqlalchemy>=2.0.36,<3.0.0
